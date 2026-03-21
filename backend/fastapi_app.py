@@ -3,7 +3,7 @@ from pathlib import Path
 import json
 import math
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import yfinance as yf
@@ -55,6 +55,10 @@ class CagrDirectRequest(BaseModel):
     items: List[CagrDirectItem]
 
 
+class ResetPayload(BaseModel):
+    confirmation: str
+
+
 def _load_cagr_data() -> dict:
     if not CAGR_JSON_PATH.exists():
         return {}
@@ -88,6 +92,11 @@ def _load_saved_tickers() -> List[str]:
 
 def _save_tickers(tickers: List[str]) -> None:
     DATA_JSON_PATH.write_text(json.dumps({"tickers": tickers}, indent=2), encoding="utf-8")
+
+
+def _reset_all_entries() -> None:
+    _save_tickers([])
+    _save_cagr_data({})
 
 
 def _delete_ticker_entry(ticker: str) -> dict:
@@ -200,6 +209,22 @@ async def delete_entry(ticker: str) -> dict:
     """Hapus satu entry ticker dari daftar saved + data CAGR."""
 
     return _delete_ticker_entry(ticker)
+
+
+@app.post("/reset-all")
+async def reset_all(payload: ResetPayload) -> dict:
+    """Reset semua ticker tersimpan + data CAGR.
+
+    Wajib confirmation exact: "yes, i want to reset"
+    """
+
+    expected = "yes, i want to reset"
+    got = (payload.confirmation or "").strip().lower()
+    if got != expected:
+        raise HTTPException(status_code=400, detail="Confirmation mismatch")
+
+    _reset_all_entries()
+    return {"reset": True, "tickers": []}
 
 
 @app.post("/decision-cagr")

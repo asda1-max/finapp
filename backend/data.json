@@ -1,16 +1,3 @@
 {
-  "tickers": [
-    "BBCA.JK",
-    "BBRI.JK",
-    "HMSP.JK",
-    "PBSA.JK",
-    "MPMX.JK",
-    "PTBA.JK",
-    "RALS.JK",
-    "GOTO.JK",
-    "BUMI.JK",
-    "ANTM.JK",
-    "DCII.JK",
-    "ROCK.JK"
-  ]
+  "tickers": []
 }

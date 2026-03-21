@@ -3,9 +3,7 @@ import './index.css';
 const searchedTickers = new Set();
 
 function updateTickerJson() {
-  const jsonEl = document.getElementById('ticker-json');
-  if (!jsonEl) return;
-  jsonEl.textContent = JSON.stringify(Array.from(searchedTickers), null, 2);
+  // panel JSON sudah dihapus dari UI, fungsi dibiarkan no-op untuk kompatibilitas.
 }
 
 function formatNumber(value) {
@@ -333,6 +331,12 @@ function init() {
 
   const input = document.getElementById('ticker-input');
   const button = document.getElementById('ticker-submit');
+  const resetAllBtn = document.getElementById('reset-all-btn');
+  const resetModal = document.getElementById('reset-modal');
+  const resetConfirmInput = document.getElementById('reset-confirm-input');
+  const resetConfirmError = document.getElementById('reset-confirm-error');
+  const resetCancelBtn = document.getElementById('reset-cancel-btn');
+  const resetConfirmBtn = document.getElementById('reset-confirm-btn');
 
   if (button && input) {
     button.addEventListener('click', () => {
@@ -344,6 +348,81 @@ function init() {
         loadSingleTicker(input.value);
       }
     });
+  }
+
+  if (resetAllBtn) {
+    const openResetModal = () => {
+      if (!resetModal) return;
+      resetModal.classList.remove('hidden');
+      resetModal.classList.add('flex');
+      if (resetConfirmError) resetConfirmError.classList.add('hidden');
+      if (resetConfirmInput) {
+        resetConfirmInput.value = '';
+        resetConfirmInput.focus();
+      }
+    };
+
+    const closeResetModal = () => {
+      if (!resetModal) return;
+      resetModal.classList.add('hidden');
+      resetModal.classList.remove('flex');
+    };
+
+    const runReset = async () => {
+      const statusEl = document.getElementById('status');
+      const cardsEl = document.getElementById('stocks-cards');
+
+      const confirmation = resetConfirmInput ? resetConfirmInput.value : '';
+      if (confirmation !== 'yes, i want to reset') {
+        if (resetConfirmError) resetConfirmError.classList.remove('hidden');
+        if (statusEl) statusEl.textContent = 'Reset dibatalkan. Frasa konfirmasi tidak cocok.';
+        return;
+      }
+
+      try {
+        const res = await fetch('http://127.0.0.1:8000/reset-all', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ confirmation }),
+        });
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+
+        if (cardsEl) cardsEl.innerHTML = '';
+        searchedTickers.clear();
+        updateTickerJson();
+        if (statusEl) statusEl.textContent = 'Semua data berhasil di-reset.';
+        closeResetModal();
+      } catch (err) {
+        if (statusEl) statusEl.textContent = `Gagal reset data: ${String(err)}`;
+      }
+    };
+
+    resetAllBtn.addEventListener('click', () => {
+      openResetModal();
+    });
+
+    if (resetCancelBtn) {
+      resetCancelBtn.addEventListener('click', () => {
+        closeResetModal();
+      });
+    }
+
+    if (resetConfirmBtn) {
+      resetConfirmBtn.addEventListener('click', () => {
+        runReset();
+      });
+    }
+
+    if (resetConfirmInput) {
+      resetConfirmInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          runReset();
+        }
+      });
+    }
   }
 
   const cardsEl = document.getElementById('stocks-cards');
