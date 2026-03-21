@@ -1,0 +1,400 @@
+import './index.css';
+
+const searchedTickers = new Set();
+
+function updateTickerJson() {
+  const jsonEl = document.getElementById('ticker-json');
+  if (!jsonEl) return;
+  jsonEl.textContent = JSON.stringify(Array.from(searchedTickers), null, 2);
+}
+
+function formatNumber(value) {
+  if (value == null || Number.isNaN(Number(value))) return '-';
+  const num = Number(value);
+  if (Math.abs(num) >= 1_000_000_000) {
+    return `${(num / 1_000_000_000).toFixed(2)}B`;
+  }
+  if (Math.abs(num) >= 1_000_000) {
+    return `${(num / 1_000_000).toFixed(2)}M`;
+  }
+  if (Math.abs(num) >= 1_000) {
+    return `${(num / 1_000).toFixed(2)}K`;
+  }
+  return num.toFixed(2);
+}
+
+function formatPercent(value) {
+  if (value == null || Number.isNaN(Number(value))) return '-';
+  return `${Number(value).toFixed(2)}%`;
+}
+
+function isLikelyInvalidTicker(stock, ticker) {
+  if (!stock || typeof stock !== 'object') return true;
+
+  const t = String(ticker || '').trim().toUpperCase();
+  const name = String(stock['Name'] || '').trim().toUpperCase();
+  const price = Number(stock['Price']);
+  const marketCap = Number(stock['Market Cap']);
+  const high52 = Number(stock['HIGH 52']);
+  const low52 = Number(stock['LOW 52']);
+
+  const noMarketData =
+    (!Number.isFinite(price) || price <= 0) &&
+    (!Number.isFinite(marketCap) || marketCap <= 0) &&
+    (!Number.isFinite(high52) || high52 <= 0) &&
+    (!Number.isFinite(low52) || low52 <= 0);
+
+  const unresolvedName = !name || name === t || name === '-';
+
+  return noMarketData && unresolvedName;
+}
+
+function buildCardHtml(ticker, s, options = {}) {
+  const { cagrReady = false } = options;
+  const name = s['Name'] ?? '-';
+  const price = formatNumber(s['Price']);
+  const revenue = formatNumber(s['Revenue Annual (Prev)']);
+  const eps = formatNumber(s['EPS NOW']);
+  const per = formatNumber(s['PER NOW']);
+  const high52 = formatNumber(s['HIGH 52']);
+  const low52 = formatNumber(s['LOW 52']);
+  const shares = formatNumber(s['Shares']);
+  const marketCap = formatNumber(s['Market Cap']);
+  const downFromHigh = formatPercent(s['Down From High 52 (%)']);
+  const downFromMonth = formatPercent(s['Down From This Month (%)']);
+  const downFromWeek = formatPercent(s['Down From This Week (%)']);
+  const downFromToday = formatPercent(s['Down From Today (%)']);
+  const riseFromLow = formatPercent(s['Rise From Low 52 (%)']);
+  const bvp = formatNumber(s['BVP Per S']);
+  const roe = formatPercent(s['ROE (%)']);
+  const graham = formatNumber(s['Graham Number']);
+  const mos = formatPercent(s['MOS (%)']);
+  const pbv = formatNumber(s['PBV']);
+  const divYield = formatPercent(s['Dividend Yield (%)']);
+  const buyDecision = s['Decision Buy'] ?? 'NO BUY';
+  const discountDecision = s['Decision Discount'] ?? '-';
+  const dividendDecision = s['Decision Dividend'] ?? '-';
+  const hybridScoreValue = typeof s['Hybrid Score'] === 'number' ? s['Hybrid Score'] : null;
+  const hybridScore = hybridScoreValue != null ? hybridScoreValue.toFixed(3) : '-';
+  const hybridCategory = s['Hybrid Category'] ?? '-';
+  const cagrWarningHtml = cagrReady
+    ? ''
+    : `
+      <div class="mt-1 rounded-md border border-amber-700/50 bg-amber-950/40 px-2 py-1 text-[10px] text-amber-300">
+        ⚠️ Warning: data CAGR belum diinput. Isi di halaman detailed untuk akurasi decision yang lebih baik.
+      </div>
+    `;
+
+  return `
+    <article
+      class="rounded-2xl border border-slate-800 bg-slate-900/80 p-3 sm:p-4 shadow-sm shadow-slate-900/70 cursor-pointer hover:border-sky-500 hover:bg-slate-900"
+      data-ticker="${ticker}"
+    >
+      <header class="mb-2 flex items-baseline justify-between gap-2">
+        <div>
+          <h2 class="text-sm font-semibold text-slate-50 truncate" title="${name}">${name}</h2>
+          <p class="text-[10px] uppercase text-slate-500">${ticker}</p>
+        </div>
+        <div class="flex items-center gap-1">
+          <span class="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-emerald-300">MOS ${mos}</span>
+          <button
+            type="button"
+            data-delete-ticker="${ticker}"
+            class="rounded-md border border-rose-700/60 bg-rose-950/40 px-2 py-0.5 text-[10px] font-medium text-rose-300 hover:border-rose-500 hover:text-rose-200"
+            title="Hapus entry"
+          >
+            Hapus
+          </button>
+        </div>
+      </header>
+      <div class="space-y-1.5 text-[11px] text-slate-300">
+        <div class="flex justify-between gap-2">
+          <span class="text-slate-400">Price</span>
+          <span class="font-medium">${price}</span>
+        </div>
+        <div class="flex justify-between gap-2">
+          <span class="text-slate-400">Revenue Annual (Prev)</span>
+          <span class="font-medium">${revenue}</span>
+        </div>
+        <div class="flex justify-between gap-2">
+          <span class="text-slate-400">EPS NOW</span>
+          <span class="font-medium">${eps}</span>
+        </div>
+        <div class="flex justify-between gap-2">
+          <span class="text-slate-400">PER NOW</span>
+          <span class="font-medium">${per}</span>
+        </div>
+        <div class="flex justify-between gap-2">
+          <span class="text-slate-400">HIGH 52</span>
+          <span class="font-medium">${high52}</span>
+        </div>
+        <div class="flex justify-between gap-2">
+          <span class="text-slate-400">LOW 52</span>
+          <span class="font-medium">${low52}</span>
+        </div>
+        <div class="flex justify-between gap-2">
+          <span class="text-slate-400">Shares</span>
+          <span class="font-medium">${shares}</span>
+        </div>
+        <div class="flex justify-between gap-2">
+          <span class="text-slate-400">Market Cap</span>
+          <span class="font-medium">${marketCap}</span>
+        </div>
+        <div class="flex justify-between gap-2">
+          <span class="text-slate-400">Down From High 52</span>
+          <span class="font-medium">${downFromHigh}</span>
+        </div>
+        <div class="flex justify-between gap-2">
+          <span class="text-slate-400">Down From This Month</span>
+          <span class="font-medium">${downFromMonth}</span>
+        </div>
+        <div class="flex justify-between gap-2">
+          <span class="text-slate-400">Down From This Week</span>
+          <span class="font-medium">${downFromWeek}</span>
+        </div>
+        <div class="flex justify-between gap-2">
+          <span class="text-slate-400">Down From Today</span>
+          <span class="font-medium">${downFromToday}</span>
+        </div>
+        <div class="flex justify-between gap-2">
+          <span class="text-slate-400">Rise From Low 52</span>
+          <span class="font-medium">${riseFromLow}</span>
+        </div>
+        <div class="flex justify-between gap-2">
+          <span class="text-slate-400">BVP Per S</span>
+          <span class="font-medium">${bvp}</span>
+        </div>
+        <div class="flex justify-between gap-2">
+          <span class="text-slate-400">ROE</span>
+          <span class="font-medium">${roe}</span>
+        </div>
+        <div class="flex justify-between gap-2">
+          <span class="text-slate-400">Graham Number</span>
+          <span class="font-medium">${graham}</span>
+        </div>
+        <div class="flex justify-between gap-2">
+          <span class="text-slate-400">MOS</span>
+          <span class="font-medium">${mos}</span>
+        </div>
+        <div class="flex justify-between gap-2">
+          <span class="text-slate-400">PBV</span>
+          <span class="font-medium">${pbv}</span>
+        </div>
+        <div class="flex justify-between gap-2">
+          <span class="text-slate-400">Dividend Yield</span>
+          <span class="font-medium">${divYield}</span>
+        </div>
+        <hr class="my-1 border-slate-800" />
+        <div class="flex justify-between gap-2 text-[10px]">
+          <span class="text-slate-400">Keputusan</span>
+          <span class="font-semibold ${buyDecision === 'BUY' ? 'text-emerald-400' : 'text-slate-400'}">${buyDecision}</span>
+        </div>
+        <div class="flex justify-between gap-2 text-[10px]">
+          <span class="text-slate-400">Hybrid Score</span>
+          <span class="font-medium text-cyan-300">${hybridScore}</span>
+        </div>
+        <div class="flex justify-between gap-2 text-[10px]">
+          <span class="text-slate-400">Hybrid Category</span>
+          <span class="font-medium text-emerald-300">${hybridCategory}</span>
+        </div>
+        ${cagrWarningHtml}
+        <div class="flex justify-between gap-2 text-[10px]">
+          <span class="text-slate-400">Diskon</span>
+          <span class="font-medium text-sky-300">${discountDecision}</span>
+        </div>
+        <div class="flex justify-between gap-2 text-[10px]">
+          <span class="text-slate-400">Dividen</span>
+          <span class="font-medium text-amber-300">${dividendDecision}</span>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+async function loadSavedTickers() {
+  const statusEl = document.getElementById('status');
+  const cardsEl = document.getElementById('stocks-cards');
+
+  if (!statusEl || !cardsEl) return;
+
+  try {
+    const res = await fetch('http://127.0.0.1:8000/saved-tickers');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const json = await res.json();
+    const tickers = Array.isArray(json.tickers) ? json.tickers : [];
+
+    if (tickers.length === 0) {
+      statusEl.textContent = 'Belum ada saham tersimpan.';
+      cardsEl.innerHTML = '';
+      return;
+    }
+
+    statusEl.textContent = `Memuat ${tickers.length} saham tersimpan...`;
+
+    cardsEl.innerHTML = '';
+
+    for (const t of tickers) {
+      await loadSingleTicker(t, { skipSave: true });
+    }
+
+    statusEl.textContent = `Menampilkan ${tickers.length} saham dari data.json.`;
+  } catch (error) {
+    statusEl.textContent = `Gagal memuat saham tersimpan: ${String(error)}`;
+  }
+}
+async function loadSingleTicker(tickerRaw, options = {}) {
+  const ticker = (tickerRaw || '').trim();
+  const { skipSave = false } = options;
+  const statusEl = document.getElementById('status');
+  const cardsEl = document.getElementById('stocks-cards');
+
+  if (!statusEl || !cardsEl) return;
+
+  if (!ticker) {
+    statusEl.textContent = 'Masukkan ticker terlebih dahulu, misal: BBCA.JK';
+    return;
+  }
+
+  try {
+    statusEl.textContent = `Memuat data untuk ${ticker}...`;
+
+    const url = `http://127.0.0.1:8000/stocks?tickers=${encodeURIComponent(ticker)}`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!Array.isArray(data) || data.length === 0) {
+      statusEl.textContent = `Tidak ada data untuk ticker ${ticker}.`;
+      return;
+    }
+
+    const s = data[0];
+
+    if (isLikelyInvalidTicker(s, ticker)) {
+      statusEl.textContent = `Ticker ${ticker} tidak valid / data tidak ditemukan.`;
+      return;
+    }
+
+    // Cek apakah user sudah menginput CAGR untuk ticker ini
+    let cagrReady = false;
+    try {
+      const cagrRes = await fetch(`http://127.0.0.1:8000/cagr-raw/${encodeURIComponent(ticker)}`);
+      if (cagrRes.ok) {
+        const cagrJson = await cagrRes.json();
+        const ni = Array.isArray(cagrJson?.net_income) ? cagrJson.net_income : [];
+        const rev = Array.isArray(cagrJson?.revenue) ? cagrJson.revenue : [];
+        const epsData = Array.isArray(cagrJson?.eps) ? cagrJson.eps : [];
+        const annualReady = ni.length >= 2 && rev.length >= 2 && epsData.length >= 2;
+
+        const hasNumeric = (v) => v !== null && v !== undefined && !Number.isNaN(Number(v));
+        const directReady =
+          hasNumeric(cagrJson?.cagr_years) && Number(cagrJson?.cagr_years) >= 1 &&
+          hasNumeric(cagrJson?.cagr_net_income) &&
+          hasNumeric(cagrJson?.cagr_revenue) &&
+          hasNumeric(cagrJson?.cagr_eps);
+
+        cagrReady = annualReady || directReady;
+      }
+    } catch (e) {
+      cagrReady = false;
+    }
+
+    const cardHtml = buildCardHtml(ticker, s, { cagrReady });
+
+    cardsEl.insertAdjacentHTML('beforeend', cardHtml);
+
+    if (!skipSave) {
+      searchedTickers.add(ticker);
+      updateTickerJson();
+
+      try {
+        await fetch('http://127.0.0.1:8000/saved-tickers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ticker }),
+        });
+      } catch (e) {
+        // ignore persistance error in UI
+      }
+    }
+
+    statusEl.textContent = `Berhasil menambahkan card untuk ${ticker}.`;
+  } catch (error) {
+    statusEl.textContent = `Gagal mengambil data untuk ${ticker}: ${String(error)}`;
+  }
+}
+
+function init() {
+  loadSavedTickers();
+
+  const input = document.getElementById('ticker-input');
+  const button = document.getElementById('ticker-submit');
+
+  if (button && input) {
+    button.addEventListener('click', () => {
+      loadSingleTicker(input.value);
+    });
+
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        loadSingleTicker(input.value);
+      }
+    });
+  }
+
+  const cardsEl = document.getElementById('stocks-cards');
+  if (cardsEl) {
+    cardsEl.addEventListener('click', (event) => {
+      const deleteBtn = event.target.closest('button[data-delete-ticker]');
+      if (deleteBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const t = deleteBtn.getAttribute('data-delete-ticker');
+        if (!t) return;
+
+        const ok = window.confirm(`Hapus entry ${t} dari dashboard dan data CAGR?`);
+        if (!ok) return;
+
+        const statusEl = document.getElementById('status');
+        const article = deleteBtn.closest('article[data-ticker]');
+
+        fetch(`http://127.0.0.1:8000/entry/${encodeURIComponent(t)}`, { method: 'DELETE' })
+          .then((res) => (res.ok ? res.json() : null))
+          .then((json) => {
+            if (!json || !json.deleted) {
+              if (statusEl) statusEl.textContent = `Entry ${t} tidak ditemukan atau gagal dihapus.`;
+              return;
+            }
+
+            if (article) article.remove();
+            searchedTickers.delete(t);
+            updateTickerJson();
+
+            if (statusEl) statusEl.textContent = `Entry ${t} berhasil dihapus.`;
+          })
+          .catch((err) => {
+            if (statusEl) statusEl.textContent = `Gagal hapus entry ${t}: ${String(err)}`;
+          });
+        return;
+      }
+
+      const article = event.target.closest('article[data-ticker]');
+      if (!article) return;
+      const t = article.getAttribute('data-ticker');
+      if (!t) return;
+      const url = `/detailed.html?ticker=${encodeURIComponent(t)}`;
+      window.location.href = url;
+    });
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
