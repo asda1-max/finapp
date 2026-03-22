@@ -1568,3 +1568,461 @@ async def calibrate_thresholds(payload: ThresholdCalibrationRequest) -> dict:
         "saved": bool(payload.save),
         "thresholds": saved_thresholds,
     }
+
+
+# ──────────────────────────────────────────────────────────────
+# Risk Management with Anti-Panic Mechanism
+# ──────────────────────────────────────────────────────────────
+
+class RiskAllocationRequest(BaseModel):
+    profile: str  # "ultra_conservative", "conservative", "conservative_semibalance", "balanced", "dividend_chaser", "aggressive", "custom"
+    total_capital: float  # total modal dalam Rp
+    tickers: List[str]  # daftar ticker dari dashboard
+    # Custom profile fields (hanya dipakai jika profile == "custom")
+    custom_bluechip_pct: float = 0
+    custom_dividend_pct: float = 0
+    custom_experimental_pct: float = 0
+    custom_cash_reserve_pct: float = 10
+    custom_max_single_exposure_pct: float = 25
+
+
+_RISK_PROFILES = {
+    "ultra_conservative": {
+        "label": "Ultra Conservative",
+        "bluechip_pct": 70,
+        "dividend_pct": 30,
+        "experimental_pct": 0,
+        "cash_reserve_pct": 20,
+        "max_single_exposure_pct": 15,
+        "description": "Zero eksperimental. Hanya bluechip + dividend. Cash reserve besar untuk tidur nyenyak.",
+    },
+    "conservative": {
+        "label": "Conservative",
+        "bluechip_pct": 60,
+        "dividend_pct": 30,
+        "experimental_pct": 10,
+        "cash_reserve_pct": 15,
+        "max_single_exposure_pct": 20,
+        "description": "Prioritas stabilitas. Sebagian besar modal di bluechip, cash reserve tinggi untuk jaga-jaga.",
+    },
+    "conservative_semibalance": {
+        "label": "Conservative-Semibalance",
+        "bluechip_pct": 35,
+        "dividend_pct": 50,
+        "experimental_pct": 15,
+        "cash_reserve_pct": 12,
+        "max_single_exposure_pct": 20,
+        "description": "Fokus dividend income, ditopang bluechip. Cocok untuk passive income seeker.",
+    },
+    "balanced": {
+        "label": "Balanced",
+        "bluechip_pct": 40,
+        "dividend_pct": 35,
+        "experimental_pct": 25,
+        "cash_reserve_pct": 10,
+        "max_single_exposure_pct": 25,
+        "description": "Seimbang antara pertumbuhan dan keamanan. Cash reserve cukup untuk 1-2x average down.",
+    },
+    "dividend_chaser": {
+        "label": "Dividend Chaser",
+        "bluechip_pct": 30,
+        "dividend_pct": 70,
+        "experimental_pct": 0,
+        "cash_reserve_pct": 10,
+        "max_single_exposure_pct": 25,
+        "description": "Fokus maksimal di saham dividen tinggi. 70% modal untuk dividend, 30% bluechip sebagai anchor.",
+    },
+    "aggressive": {
+        "label": "Aggressive",
+        "bluechip_pct": 20,
+        "dividend_pct": 30,
+        "experimental_pct": 50,
+        "cash_reserve_pct": 5,
+        "max_single_exposure_pct": 30,
+        "description": "High risk high reward. Eksperimental dominan, cash reserve minimal.",
+    },
+}
+
+
+def _classify_ticker_bucket(stock: dict) -> str:
+    """Klasifikasi otomatis ticker ke salah satu bucket.
+
+    Urutan prioritas:
+    1. Bluechip: Quality >= 0.65 AND Market Cap >= 50 Triliun
+    2. Dividend Chaser: Div Yield >= 4% AND Quality >= 0.5
+    3. Experimental: sisanya
+    """
+
+    quality = float(stock.get("Quality Score") or 0.0)
+    market_cap = float(stock.get("Market Cap") or 0.0)
+    div_yield_raw = stock.get("Dividend Yield (%)")
+
+    # Normalize div_yield
+    dy = 0.0
+    if div_yield_raw is not None:
+        try:
+            dy = float(div_yield_raw)
+        except (TypeError, ValueError):
+            dy = 0.0
+    if 0 < dy < 1:
+        dy = dy * 100
+
+    # Bluechip: high quality + large cap
+    if quality >= 0.65 and market_cap >= 50_000_000_000_000:
+        return "bluechip"
+
+    # Dividend Chaser: good yield + decent quality
+    if dy >= 4.0 and quality >= 0.5:
+        return "dividend"
+
+    return "experimental"
+
+
+@app.post("/risk-allocation")
+async def risk_allocation(payload: RiskAllocationRequest) -> dict:
+    """Hitung alokasi portofolio berdasarkan risk profile.
+
+    Auto-klasifikasi ticker ke 3 bucket (bluechip/dividend/experimental),
+    lalu alokasikan modal sesuai profil dengan anti-panic buffer.
+    """
+
+    profile_key = (payload.profile or "balanced").strip().lower()
+
+    if profile_key == "custom":
+        # Validasi custom percentages
+        bp = float(payload.custom_bluechip_pct or 0)
+        dp = float(payload.custom_dividend_pct or 0)
+        ep = float(payload.custom_experimental_pct or 0)
+        cr = float(payload.custom_cash_reserve_pct or 10)
+        ms = float(payload.custom_max_single_exposure_pct or 25)
+
+        bucket_sum = bp + dp + ep
+        if abs(bucket_sum - 100.0) > 0.01:
+            raise HTTPException(status_code=400, detail=f"Bluechip + Dividend + Experimental harus = 100%. Sekarang: {bucket_sum}%")
+        if cr < 0 or cr > 50:
+            raise HTTPException(status_code=400, detail=f"Cash reserve harus 0-50%. Sekarang: {cr}%")
+
+        profile = {
+            "label": "Custom",
+            "bluechip_pct": bp,
+            "dividend_pct": dp,
+            "experimental_pct": ep,
+            "cash_reserve_pct": cr,
+            "max_single_exposure_pct": ms,
+            "description": f"Custom: Bluechip {bp:.0f}% / Dividend {dp:.0f}% / Experimental {ep:.0f}% — Cash reserve {cr:.0f}%",
+        }
+    elif profile_key not in _RISK_PROFILES:
+        valid = ", ".join(list(_RISK_PROFILES.keys()) + ["custom"])
+        raise HTTPException(status_code=400, detail=f"Profile tidak valid: {profile_key}. Pilih: {valid}")
+    else:
+        profile = _RISK_PROFILES[profile_key]
+    total_capital = float(payload.total_capital or 0)
+    if total_capital <= 0:
+        raise HTTPException(status_code=400, detail="Total capital harus > 0")
+
+    tickers = [t.strip() for t in (payload.tickers or []) if t.strip()]
+    if not tickers:
+        raise HTTPException(status_code=400, detail="Minimal 1 ticker diperlukan")
+
+    # Ambil data fundamental untuk semua ticker
+    df = get_stock_data(tickers)
+    stock_data = df.to_dict(orient="records") if df is not None else []
+
+    # Klasifikasi tiap ticker
+    ticker_buckets: dict = {}  # ticker -> { bucket, stock_data }
+    for s in stock_data:
+        t = str(s.get("Ticker") or s.get("Name") or "-")
+        bucket = _classify_ticker_bucket(s)
+        ticker_buckets[t] = {
+            "bucket": bucket,
+            "price": float(s.get("Price") or 0),
+            "name": str(s.get("Name") or t),
+            "sector": str(s.get("Sector") or "-"),
+            "quality_score": float(s.get("Quality Score") or 0),
+            "quality_label": str(s.get("Quality Label") or "-"),
+            "div_yield": float(s.get("Dividend Yield (%)") or 0),
+            "market_cap": float(s.get("Market Cap") or 0),
+            "hybrid_score": float(s.get("Final Hybrid Score") or s.get("Hybrid Score") or 0),
+            "decision": str(s.get("Final Decision Buy") or s.get("Decision Buy") or "NO BUY"),
+        }
+
+    # Hitung capital per bucket
+    cash_reserve_pct = profile["cash_reserve_pct"]
+    investable_capital = total_capital * (1 - cash_reserve_pct / 100.0)
+    cash_reserve = total_capital - investable_capital
+    max_single_pct = profile["max_single_exposure_pct"]
+    max_single_capital = total_capital * (max_single_pct / 100.0)
+
+    bucket_names = ["bluechip", "dividend", "experimental"]
+    bucket_pcts = {
+        "bluechip": profile["bluechip_pct"],
+        "dividend": profile["dividend_pct"],
+        "experimental": profile["experimental_pct"],
+    }
+
+    # Group tickers by bucket
+    grouped: dict = {b: [] for b in bucket_names}
+    for t, info in ticker_buckets.items():
+        grouped[info["bucket"]].append(t)
+
+    # Hitung capital per bucket
+    bucket_capitals: dict = {}
+    for b in bucket_names:
+        bucket_capitals[b] = investable_capital * (bucket_pcts[b] / 100.0)
+
+    # Alokasi per-ticker
+    allocations = []
+    bucket_summaries = {}
+
+    for b in bucket_names:
+        tickers_in_bucket = grouped[b]
+        capital_for_bucket = bucket_capitals[b]
+
+        if not tickers_in_bucket:
+            bucket_summaries[b] = {
+                "pct": bucket_pcts[b],
+                "capital": round(capital_for_bucket, 0),
+                "ticker_count": 0,
+                "tickers": [],
+                "unallocated": round(capital_for_bucket, 0),
+            }
+            continue
+
+        # ── Sortir berdasarkan Hybrid Score (tertinggi = paling worth it) ──
+        tickers_in_bucket.sort(
+            key=lambda t: ticker_buckets[t]["hybrid_score"],
+            reverse=True,
+        )
+
+        # ── Strategi alokasi berbeda per bucket ──
+        # Bluechip: GREEDY — prioritas top-ranked, karena bluechip kuat dan stabil
+        # Dividend & Experimental: SPREAD — dibagi merata untuk diversifikasi,
+        #   karena lebih rentan anjlok individual
+        use_greedy = (b == "bluechip")
+
+        remaining_capital = capital_for_bucket
+        capital_per_ticker = capital_for_bucket / len(tickers_in_bucket) if not use_greedy else 0
+        bucket_allocated = 0.0
+        bucket_ticker_list = []
+
+        for rank, t in enumerate(tickers_in_bucket, start=1):
+            info = ticker_buckets[t]
+            price = info["price"]
+
+            if price <= 0:
+                bucket_ticker_list.append(t)
+                allocations.append({
+                    "ticker": t,
+                    "name": info["name"],
+                    "bucket": b,
+                    "rank": rank,
+                    "hybrid_score": round(info["hybrid_score"], 3),
+                    "capital_allocated": 0,
+                    "price": 0,
+                    "lots": 0,
+                    "shares": 0,
+                    "pct_of_total": 0,
+                    "note": "Harga tidak tersedia",
+                })
+                continue
+
+            if use_greedy and remaining_capital <= 0:
+                bucket_ticker_list.append(t)
+                allocations.append({
+                    "ticker": t,
+                    "name": info["name"],
+                    "bucket": b,
+                    "rank": rank,
+                    "hybrid_score": round(info["hybrid_score"], 3),
+                    "capital_allocated": 0,
+                    "price": round(price, 0),
+                    "lots": 0,
+                    "shares": 0,
+                    "pct_of_total": 0,
+                    "note": "Modal bucket sudah habis (rank lebih rendah)",
+                })
+                continue
+
+            # Greedy: ambil sebanyak mungkin dari sisa modal bucket
+            # Spread: ambil porsi merata, tapi gak boleh lebih dari sisa atau max exposure
+            if use_greedy:
+                effective_capital = min(remaining_capital, max_single_capital)
+            else:
+                effective_capital = min(capital_per_ticker, remaining_capital, max_single_capital)
+
+            # Hitung lot (1 lot = 100 lembar di IDX)
+            shares_float = effective_capital / price
+            lots = int(shares_float // 100)
+
+            if lots < 1:
+                bucket_ticker_list.append(t)
+                allocations.append({
+                    "ticker": t,
+                    "name": info["name"],
+                    "bucket": b,
+                    "rank": rank,
+                    "hybrid_score": round(info["hybrid_score"], 3),
+                    "capital_allocated": 0,
+                    "price": round(price, 0),
+                    "lots": 0,
+                    "shares": 0,
+                    "pct_of_total": 0,
+                    "note": f"Modal tidak cukup untuk 1 lot (butuh Rp {price * 100:,.0f})",
+                })
+                continue
+
+            shares = lots * 100
+            actual_cost = shares * price
+            pct_of_total = (actual_cost / total_capital) * 100
+
+            remaining_capital -= actual_cost
+            bucket_allocated += actual_cost
+            bucket_ticker_list.append(t)
+
+            allocations.append({
+                "ticker": t,
+                "name": info["name"],
+                "bucket": b,
+                "rank": rank,
+                "hybrid_score": round(info["hybrid_score"], 3),
+                "capital_allocated": round(actual_cost, 0),
+                "price": round(price, 0),
+                "lots": lots,
+                "shares": shares,
+                "pct_of_total": round(pct_of_total, 2),
+                "note": None,
+            })
+
+        bucket_summaries[b] = {
+            "pct": bucket_pcts[b],
+            "capital": round(capital_for_bucket, 0),
+            "ticker_count": len(tickers_in_bucket),
+            "tickers": bucket_ticker_list,
+            "allocated": round(bucket_allocated, 0),
+            "unallocated": round(capital_for_bucket - bucket_allocated, 0),
+        }
+
+    # ── Sweep Round: habiskan sisa investable capital ──
+    # Setelah alokasi per-bucket, sisa modal (karena lot rounding) disapu
+    # dengan beli 1 lot tambahan di ticker yang masih muat, berdasarkan
+    # Hybrid Score. Ini memastikan ~100% capital utilization.
+    total_invested_initial = sum(a["capital_allocated"] for a in allocations)
+    sweep_remaining = investable_capital - total_invested_initial
+
+    # Buat lookup cepat: ticker → index di allocations
+    alloc_index: dict = {}
+    for i, a in enumerate(allocations):
+        alloc_index[a["ticker"]] = i
+
+    # Semua ticker yang bisa dibeli, sortir by hybrid score
+    all_tickers_sorted = sorted(
+        ticker_buckets.keys(),
+        key=lambda t: ticker_buckets[t]["hybrid_score"],
+        reverse=True,
+    )
+
+    sweep_count = 0
+    sweep_pass = 0
+    max_sweep_passes = 50  # safety limit
+
+    while sweep_remaining > 0 and sweep_pass < max_sweep_passes:
+        bought_this_pass = False
+        sweep_pass += 1
+
+        for t in all_tickers_sorted:
+            info = ticker_buckets[t]
+            price = info["price"]
+            if price <= 0:
+                continue
+
+            # Skip bucket yang alokasi-nya 0% di profile
+            t_bucket = info["bucket"]
+            if bucket_pcts.get(t_bucket, 0) <= 0:
+                continue
+
+            one_lot_cost = price * 100
+            if one_lot_cost > sweep_remaining:
+                continue
+
+            # Cek max single exposure
+            idx = alloc_index.get(t)
+            current_invested = allocations[idx]["capital_allocated"] if idx is not None else 0
+            if current_invested + one_lot_cost > max_single_capital:
+                continue
+
+            # Beli 1 lot tambahan
+            if idx is not None:
+                allocations[idx]["lots"] += 1
+                allocations[idx]["shares"] += 100
+                allocations[idx]["capital_allocated"] = round(allocations[idx]["capital_allocated"] + one_lot_cost, 0)
+                allocations[idx]["pct_of_total"] = round((allocations[idx]["capital_allocated"] / total_capital) * 100, 2)
+                if allocations[idx]["note"] is None:
+                    allocations[idx]["note"] = "+1 lot (sweep)"
+                elif "sweep" in str(allocations[idx]["note"]):
+                    # Update sweep count in note
+                    sweep_count += 1
+                else:
+                    allocations[idx]["note"] = str(allocations[idx]["note"]) + " +1 lot (sweep)"
+
+            sweep_remaining -= one_lot_cost
+            bought_this_pass = True
+            break  # restart loop to re-check best option
+
+        if not bought_this_pass:
+            break
+
+    # Update bucket summaries after sweep
+    for b in bucket_names:
+        bucket_tickers = [a for a in allocations if a["bucket"] == b]
+        total_b = sum(a["capital_allocated"] for a in bucket_tickers)
+        if b in bucket_summaries:
+            bucket_summaries[b]["allocated"] = round(total_b, 0)
+            bucket_summaries[b]["unallocated"] = round(bucket_summaries[b]["capital"] - total_b, 0)
+
+    # Total yang benar-benar diam di saham
+    total_invested = sum(a["capital_allocated"] for a in allocations)
+    total_remaining = total_capital - total_invested
+
+    # Anti-panic message
+    if profile_key == "conservative":
+        panic_msg = (
+            f"Sisihkan Rp {cash_reserve:,.0f} sebagai buffer emergency. "
+            f"Jangan gunakan uang ini untuk beli saham saat market turun. "
+            f"Portofolio bluechip-heavy mu akan stabil sendiri."
+        )
+    elif profile_key == "balanced":
+        panic_msg = (
+            f"Simpan Rp {cash_reserve:,.0f} sebagai amunisi average down. "
+            f"Saat market turun 10%+, baru gunakan cash ini untuk top up posisi dividend/bluechip."
+        )
+    else:
+        panic_msg = (
+            f"Cash Rp {cash_reserve:,.0f} minimal, pastikan kamu siap mental lihat portofolio merah. "
+            f"Kalau panik, jangan jual — justru average down posisi experimental yang punya fundamental kuat."
+        )
+
+    return {
+        "profile": profile_key,
+        "profile_label": profile["label"],
+        "profile_description": profile["description"],
+        "total_capital": round(total_capital, 0),
+        "cash_reserve_pct": cash_reserve_pct,
+        "cash_reserve": round(cash_reserve, 0),
+        "investable_capital": round(investable_capital, 0),
+        "total_invested": round(total_invested, 0),
+        "total_remaining": round(total_remaining, 0),
+        "max_single_exposure_pct": max_single_pct,
+        "buckets": bucket_summaries,
+        "allocations": allocations,
+        "ticker_classification": {
+            t: {"bucket": info["bucket"], "quality_score": info["quality_score"],
+                "div_yield": info["div_yield"], "market_cap": info["market_cap"]}
+            for t, info in ticker_buckets.items()
+        },
+        "anti_panic": {
+            "cash_reserve": round(cash_reserve, 0),
+            "max_single_exposure_pct": max_single_pct,
+            "message": panic_msg,
+        },
+    }
+

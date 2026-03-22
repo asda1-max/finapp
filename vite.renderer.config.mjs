@@ -10,6 +10,7 @@ export default defineConfig({
         detailed: resolve(__dirname, 'detailed.html'),
         ranking: resolve(__dirname, 'ranking.html'),
         config: resolve(__dirname, 'config.html'),
+        riskmgmt: resolve(__dirname, 'riskmgmt.html'),
       },
     },
   },

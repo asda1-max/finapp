@@ -217,6 +217,7 @@ def _apply_discount_timing_verdict(df: pd.DataFrame) -> pd.DataFrame:
     Prinsip:
     - Discount score tidak berdiri sendiri.
     - Wajib dibaca bersama sinyal hybrid dan quality score.
+    - "Buy with Risk" bisa di-upgrade jika diskon tinggi + quality OK.
     """
 
     if df is None or len(df) == 0:
@@ -226,6 +227,7 @@ def _apply_discount_timing_verdict(df: pd.DataFrame) -> pd.DataFrame:
     for _, row in df.iterrows():
         final_dec = str(row.get("Final Decision Buy") or row.get("Decision Buy") or "NO BUY").strip().upper()
         execution_dec = str(row.get("Execution Decision") or final_dec).strip().upper()
+        hybrid_cat = str(row.get("Final Hybrid Category") or row.get("Hybrid Category") or "").strip()
         dscore = pd.to_numeric(row.get("Discount Score"), errors="coerce")
         qscore = pd.to_numeric(row.get("Quality Score"), errors="coerce")
 
@@ -233,11 +235,17 @@ def _apply_discount_timing_verdict(df: pd.DataFrame) -> pd.DataFrame:
         qscore = float(qscore) if not pd.isna(qscore) else 0.0
 
         if final_dec != "BUY":
-            verdict = "NO BUY - ikut hybrid signal"
+            # Cek apakah "Buy with Risk" bisa di-upgrade oleh discount + quality
+            if hybrid_cat == "Buy with Risk" and dscore >= 0.50 and qscore >= 0.5:
+                verdict = "BUY signal marginal, tapi timing diskon bagus (consider buy)"
+            else:
+                verdict = "NO BUY - ikut hybrid signal"
         elif execution_dec == "HOLD":
             verdict = "BUY signal ada, tapi HOLD oleh safety check"
         elif qscore < 0.5 and dscore >= 0.35:
             verdict = "Discount tinggi, tapi quality lemah (hindari value trap)"
+        elif dscore >= 0.50:
+            verdict = "BUY - timing sangat bagus (diskon tinggi)"
         elif dscore >= 0.35:
             verdict = "BUY - timing bagus"
         else:
@@ -621,9 +629,15 @@ def _apply_vikor_buy_decision(df: pd.DataFrame) -> pd.DataFrame:
 def _apply_fuzzy_ahp_topsis_buy_decision(df: pd.DataFrame) -> pd.DataFrame:
     """Terapkan Hybrid FUZZY AHP-TOPSIS untuk keputusan BUY/NO BUY di dashboard.
 
-    Menggunakan mesin yang sama dengan detailed CAGR (decision_making.py),
-    tetapi dengan CAGR = 0 dan hanya memanfaatkan faktor fundamental:
-    ROE, MOS, PBV, Dividend Yield, Down From High.
+    Menggunakan mesin yang sama dengan detailed CAGR (decision_making.py).
+    Evaluasi dilakukan secara BATCH (semua ticker sekaligus) agar TOPSIS
+    bisa membandingkan secara relatif antar ticker, bukan fallback absolut.
+
+    Perbaikan vs versi sebelumnya:
+    - Batch evaluation (bukan per-ticker)
+    - down_from_high dimasukkan ke CagrResult
+    - quality_score dan discount_score dimasukkan ke CagrResult
+    - Quality gate: quality < 0.4 + BUY → downgrade ke NO BUY
     """
 
     if df is None or len(df) == 0:
@@ -643,6 +657,12 @@ def _apply_fuzzy_ahp_topsis_buy_decision(df: pd.DataFrame) -> pd.DataFrame:
 
     cagr_items = _load_cagr_items()
 
+    # ── Fase 1: Kumpulkan semua CagrResult untuk evaluasi batch ──
+    base_results = []       # Semua ticker, tanpa CAGR (mode dashboard)
+    final_results = []      # Ticker yang punya CAGR saja
+    final_ticker_set = set()
+    row_data = []           # Simpan data per-row untuk mapping nanti
+
     for idx, row in df.iterrows():
         ticker = str(row.get("Ticker") or row.get("Name") or "-")
 
@@ -651,9 +671,12 @@ def _apply_fuzzy_ahp_topsis_buy_decision(df: pd.DataFrame) -> pd.DataFrame:
         pbv = float(row.get("PBV") or 0.0)
         div_yield = float(row.get("Dividend Yield (%)") or 0.0)
         per = float(row.get("PER NOW") or 0.0)
+        down_from_high = float(row.get("Down From High 52 (%)") or 0.0)
+        quality_score = float(row.get("Quality Score") or 0.0)
+        discount_score = float(row.get("Discount Score") or 0.0)
 
-        # 1) Base signal dashboard: selalu no_cagr
-        base_result = CagrResult(
+        # Base CagrResult (no CAGR)
+        base_results.append(CagrResult(
             ticker=ticker,
             cagr_net_income=0.0,
             cagr_revenue=0.0,
@@ -663,20 +686,15 @@ def _apply_fuzzy_ahp_topsis_buy_decision(df: pd.DataFrame) -> pd.DataFrame:
             pbv=pbv,
             div_yield=div_yield,
             per=per,
-            down_from_high=0.0,
-        )
+            down_from_high=down_from_high,
+            quality_score=quality_score,
+            discount_score=discount_score,
+        ))
 
-        base_eval = evaluate_cagr_methods([base_result], use_cagr=False)
-        base_info = ((base_eval.get("methods") or {}).get("FUZZY_AHP_TOPSIS") or {}).get(ticker) or {}
-
-        base_decision = base_info.get("decision")
-        base_score = base_info.get("score")
-        base_category = base_info.get("category")
-
-        # 2) Final signal (detail-style): pakai CAGR jika tersedia
+        # Final CagrResult (with CAGR jika tersedia)
         cagr_net, cagr_rev, cagr_eps, has_cagr = _extract_cagr_for_ticker(ticker, cagr_items)
         if has_cagr:
-            final_result = CagrResult(
+            final_results.append(CagrResult(
                 ticker=ticker,
                 cagr_net_income=cagr_net,
                 cagr_revenue=cagr_rev,
@@ -686,16 +704,65 @@ def _apply_fuzzy_ahp_topsis_buy_decision(df: pd.DataFrame) -> pd.DataFrame:
                 pbv=pbv,
                 div_yield=div_yield,
                 per=per,
-                down_from_high=0.0,
-            )
-            final_eval = evaluate_cagr_methods([final_result], use_cagr=True)
-            final_info = ((final_eval.get("methods") or {}).get("FUZZY_AHP_TOPSIS") or {}).get(ticker) or {}
+                down_from_high=down_from_high,
+                quality_score=quality_score,
+                discount_score=discount_score,
+            ))
+            final_ticker_set.add(ticker)
+
+        row_data.append({
+            "idx": idx,
+            "ticker": ticker,
+            "has_cagr": has_cagr,
+            "quality_score": quality_score,
+            "discount_score": discount_score,
+        })
+
+    # ── Fase 2: Evaluasi batch ──
+    base_eval = evaluate_cagr_methods(base_results, use_cagr=False)
+
+    if final_results:
+        final_eval = evaluate_cagr_methods(final_results, use_cagr=True)
+    else:
+        final_eval = None
+
+    # ── Fase 3: Map hasil kembali ke DataFrame ──
+    base_hybrid = (base_eval.get("methods") or {}).get("FUZZY_AHP_TOPSIS") or {}
+    final_hybrid = ((final_eval.get("methods") or {}).get("FUZZY_AHP_TOPSIS") or {}) if final_eval else {}
+
+    _QUALITY_GATE_THRESHOLD = 0.4  # Quality di bawah ini → downgrade BUY ke NO BUY
+
+    for rd in row_data:
+        idx = rd["idx"]
+        ticker = rd["ticker"]
+        has_cagr = rd["has_cagr"]
+        qscore = rd["quality_score"]
+
+        # Base signal (no_cagr)
+        base_info = base_hybrid.get(ticker) or {}
+        base_decision = base_info.get("decision")
+        base_score = base_info.get("score")
+        base_category = base_info.get("category")
+
+        # Final signal (with_cagr jika tersedia, otherwise sama dengan base)
+        if has_cagr:
+            final_info = final_hybrid.get(ticker) or {}
         else:
             final_info = base_info
 
         final_decision = final_info.get("decision")
         final_score = final_info.get("score")
         final_category = final_info.get("category")
+
+        # ── Quality Gate ──
+        # Jika quality terlalu rendah, downgrade BUY ke NO BUY
+        if qscore < _QUALITY_GATE_THRESHOLD:
+            if base_decision == "BUY":
+                base_decision = "NO BUY"
+                base_category = "Don't Buy"
+            if final_decision == "BUY":
+                final_decision = "NO BUY"
+                final_category = "Don't Buy"
 
         if base_decision:
             df.at[idx, "Decision Buy"] = base_decision

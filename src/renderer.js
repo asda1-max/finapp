@@ -1,4 +1,6 @@
 import './index.css';
+import { initNavbar } from './navbar.js';
+initNavbar();
 
 const searchedTickers = new Set();
 const tickerCache = new Map();

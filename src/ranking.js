@@ -1,4 +1,6 @@
 import './index.css';
+import { initNavbar } from './navbar.js';
+initNavbar();
 
 let rankingPayload = null;
 

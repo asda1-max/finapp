@@ -11,6 +11,18 @@ import numpy as np
 THRESHOLDS_JSON_PATH = Path(__file__).with_name("thresholds.json")
 
 
+# Sentinel untuk membedakan "data tidak tersedia" vs "nilainya memang 0".
+# Jika field fundamental di CagrResult di-set ke _NONE_SENTINEL,
+# normalisasi akan menggunakan 0.5 (netral) alih-alih 0 (hukuman).
+_NONE_SENTINEL = float("nan")
+
+
+def _is_none_sentinel(v: float) -> bool:
+    """Cek apakah value adalah sentinel 'data tidak tersedia'."""
+    import math
+    return v is None or (isinstance(v, float) and math.isnan(v))
+
+
 @dataclass
 class CagrResult:
     ticker: str
@@ -24,6 +36,10 @@ class CagrResult:
     div_yield: float = 0.0
     per: float = 0.0
     down_from_high: float = 0.0
+    # Quality score (0..1) dari data.py, opsional
+    quality_score: float = _NONE_SENTINEL
+    # Discount score (0..1) dari data.py, opsional
+    discount_score: float = _NONE_SENTINEL
 
 
 def compute_cagr(values: Sequence[float]) -> float:
@@ -113,6 +129,8 @@ def _build_full_matrix(results: List[CagrResult]) -> np.ndarray:
     ]
     """
 
+    _NEUTRAL = 0.5  # Skor netral untuk data yang tidak tersedia
+
     rows = []
     for r in results:
         eps_n = _normalize_cagr(r.cagr_eps)
@@ -120,42 +138,57 @@ def _build_full_matrix(results: List[CagrResult]) -> np.ndarray:
         rev_n = _normalize_cagr(r.cagr_revenue)
 
         # ROE normalisasi 0..30% -> 0..1
-        roe_raw = float(r.roe or 0.0)
-        roe_n = max(0.0, min(roe_raw, 30.0)) / 30.0
+        if _is_none_sentinel(r.roe):
+            roe_n = _NEUTRAL
+        else:
+            roe_raw = float(r.roe or 0.0)
+            roe_n = max(0.0, min(roe_raw, 30.0)) / 30.0
 
         # MOS normalisasi 0..80% -> 0..1, negatif dianggap 0
-        mos_raw = float(r.mos or 0.0)
-        mos_raw = max(0.0, mos_raw)
-        mos_n = max(0.0, min(mos_raw, 80.0)) / 80.0
+        if _is_none_sentinel(r.mos):
+            mos_n = _NEUTRAL
+        else:
+            mos_raw = float(r.mos or 0.0)
+            mos_raw = max(0.0, mos_raw)
+            mos_n = max(0.0, min(mos_raw, 80.0)) / 80.0
 
         # PBV: lebih kecil lebih baik. <=1 ->1, >=4 ->0, linear di antaranya
-        pbv_raw = float(r.pbv or 0.0)
-        if pbv_raw <= 0:
-            pbv_score = 0.0
-        elif pbv_raw <= 1.0:
-            pbv_score = 1.0
-        elif pbv_raw >= 4.0:
-            pbv_score = 0.0
+        if _is_none_sentinel(r.pbv):
+            pbv_score = _NEUTRAL
         else:
-            pbv_score = (4.0 - pbv_raw) / (4.0 - 1.0)
+            pbv_raw = float(r.pbv or 0.0)
+            if pbv_raw <= 0:
+                pbv_score = 0.0
+            elif pbv_raw <= 1.0:
+                pbv_score = 1.0
+            elif pbv_raw >= 4.0:
+                pbv_score = 0.0
+            else:
+                pbv_score = (4.0 - pbv_raw) / (4.0 - 1.0)
 
         # Dividend yield 0..10% -> 0..1
-        dy_raw = float(r.div_yield or 0.0)
-        dy_raw = max(0.0, dy_raw)
-        dy_n = max(0.0, min(dy_raw, 10.0)) / 10.0
+        if _is_none_sentinel(r.div_yield):
+            dy_n = _NEUTRAL
+        else:
+            dy_raw = float(r.div_yield or 0.0)
+            dy_raw = max(0.0, dy_raw)
+            dy_n = max(0.0, min(dy_raw, 10.0)) / 10.0
 
         # PER: lebih kecil lebih baik. Kita asumsikan 5..25x sebagai rentang
         # relevan. PER <=5 dianggap sangat murah (skor 1), PER >=25 dianggap
         # mahal (skor 0), di antaranya linear.
-        per_raw = float(r.per or 0.0)
-        if per_raw <= 0:
-            per_score = 0.0
-        elif per_raw <= 5.0:
-            per_score = 1.0
-        elif per_raw >= 25.0:
-            per_score = 0.0
+        if _is_none_sentinel(r.per):
+            per_score = _NEUTRAL
         else:
-            per_score = (25.0 - per_raw) / (25.0 - 5.0)
+            per_raw = float(r.per or 0.0)
+            if per_raw <= 0:
+                per_score = 0.0
+            elif per_raw <= 5.0:
+                per_score = 1.0
+            elif per_raw >= 25.0:
+                per_score = 0.0
+            else:
+                per_score = (25.0 - per_raw) / (25.0 - 5.0)
 
         rows.append([roe_n, net_n, dy_n, mos_n, pbv_score, per_score, rev_n, eps_n])
 
@@ -415,17 +448,48 @@ def _method_hybrid_scores(full_matrix: np.ndarray, use_cagr: bool) -> tuple[np.n
     return scores, rec_thr, buy_thr, risk_thr
 
 
+def _load_method_thresholds(method: str) -> dict:
+    """Baca threshold untuk metode tertentu dari thresholds.json.
+
+    Fallback ke dict kosong jika file tidak ada atau method tidak ditemukan.
+    Caller bertanggung jawab menyediakan default via .get(key, default).
+    """
+    try:
+        raw = json.loads(THRESHOLDS_JSON_PATH.read_text(encoding="utf-8")) if THRESHOLDS_JSON_PATH.exists() else {}
+    except (json.JSONDecodeError, OSError):
+        raw = {}
+    methods = raw.get("methods") if isinstance(raw.get("methods"), dict) else {}
+    cfg = methods.get(method) if isinstance(methods.get(method), dict) else {}
+    return cfg
+
+
 def _decision_saw(score, mos):
-    return "BUY" if score >= 0.365 or (mos > 15.0 and score >= 0.300) else "NO BUY"
+    cfg = _load_method_thresholds("SAW")
+    buy = float(cfg.get("buy", 0.365))
+    mos_boost = float(cfg.get("mos_boost_buy", 0.300))
+    mos_trigger = float(cfg.get("mos_trigger", 15.0))
+    return "BUY" if score >= buy or (mos > mos_trigger and score >= mos_boost) else "NO BUY"
 
 def _decision_ahp(score, mos):
-    return "BUY" if score >= 0.430 or (mos > 15.0 and score >= 0.360) else "NO BUY"
+    cfg = _load_method_thresholds("AHP")
+    buy = float(cfg.get("buy", 0.430))
+    mos_boost = float(cfg.get("mos_boost_buy", 0.360))
+    mos_trigger = float(cfg.get("mos_trigger", 15.0))
+    return "BUY" if score >= buy or (mos > mos_trigger and score >= mos_boost) else "NO BUY"
 
 def _decision_topsis(score, mos):
-    return "BUY" if score >= 0.405 or (mos > 15.0 and score >= 0.330) else "NO BUY"
+    cfg = _load_method_thresholds("TOPSIS")
+    buy = float(cfg.get("buy", 0.405))
+    mos_boost = float(cfg.get("mos_boost_buy", 0.330))
+    mos_trigger = float(cfg.get("mos_trigger", 15.0))
+    return "BUY" if score >= buy or (mos > mos_trigger and score >= mos_boost) else "NO BUY"
 
 def _decision_vikor(score, mos):
-    return "BUY" if score >= 0.450 or (mos > 15.0 and score >= 0.370) else "NO BUY"
+    cfg = _load_method_thresholds("VIKOR")
+    buy = float(cfg.get("buy", 0.450))
+    mos_boost = float(cfg.get("mos_boost_buy", 0.370))
+    mos_trigger = float(cfg.get("mos_trigger", 15.0))
+    return "BUY" if score >= buy or (mos > mos_trigger and score >= mos_boost) else "NO BUY"
 
 
 def _decision_hybrid(score: float, use_cagr: bool) -> tuple[str, str]:
