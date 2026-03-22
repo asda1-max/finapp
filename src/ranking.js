@@ -223,7 +223,7 @@ function init() {
 
   if (backBtn) {
     backBtn.addEventListener('click', () => {
-      window.location.href = '/index.html';
+      window.location.href = 'index.html';
     });
   }
 
@@ -251,7 +251,8 @@ function init() {
       if (!tr) return;
       const ticker = tr.getAttribute('data-ticker');
       if (!ticker) return;
-      window.location.href = `/detailed.html?ticker=${encodeURIComponent(ticker)}`;
+      sessionStorage.setItem('currentTicker', ticker);
+      window.location.href = 'detailed.html';
     });
   }
 

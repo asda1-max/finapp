@@ -3,11 +3,14 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 import json
-
+import os
 from backend.decision_making import CagrResult, evaluate_cagr_methods, compute_cagr
 
-
-CAGR_JSON_PATH = Path(__file__).with_name("cagr_data.json")
+FINAPP_DATA_DIR = os.environ.get('FINAPP_DATA_DIR')
+if FINAPP_DATA_DIR:
+    CAGR_JSON_PATH = Path(FINAPP_DATA_DIR) / 'cagr_data.json'
+else:
+    CAGR_JSON_PATH = Path(__file__).with_name("cagr_data.json")
 
 
 def _normalize_percent_value(raw_value):
@@ -304,6 +307,83 @@ def _extract_cagr_for_ticker(ticker: str, cagr_items: dict) -> tuple[float, floa
         return compute_cagr(ni), compute_cagr(rev), compute_cagr(eps), True
 
     return 0.0, 0.0, 0.0, False
+
+
+def _extract_financial_series(financials, candidates: list[str]) -> list[float]:
+    if financials is None:
+        return []
+    try:
+        idx = list(financials.index)
+    except Exception:
+        return []
+
+    for name in candidates:
+        if name not in idx:
+            continue
+        try:
+            row = financials.loc[name]
+            row = row.sort_index().dropna()
+            vals = pd.to_numeric(row, errors="coerce").replace([np.inf, -np.inf], np.nan).dropna().tolist()
+            vals = [float(v) for v in vals if v is not None]
+            if len(vals) >= 2:
+                return vals
+        except Exception:
+            continue
+    return []
+
+
+def _extract_eps_series_for_auto_cagr(stock, financials) -> list[float]:
+    eps_from_fin = _extract_financial_series(financials, ["Diluted EPS", "Basic EPS", "Normalized EPS"])
+    if len(eps_from_fin) >= 2:
+        return eps_from_fin
+
+    try:
+        eh = stock.earnings_history
+    except Exception:
+        return []
+
+    if eh is None:
+        return []
+    try:
+        if eh.empty or "epsActual" not in eh.columns:
+            return []
+    except Exception:
+        return []
+
+    try:
+        df = eh.copy()
+        if "asOfDate" in df.columns:
+            years = pd.to_datetime(df["asOfDate"], errors="coerce").dt.year
+        else:
+            years = pd.to_datetime(df.index, errors="coerce").year
+
+        work = pd.DataFrame({"year": years, "eps": pd.to_numeric(df["epsActual"], errors="coerce")})
+        work = work.dropna(subset=["year", "eps"])
+        if work.empty:
+            return []
+
+        yearly = work.groupby("year", as_index=True)["eps"].mean().sort_index()
+        vals = yearly.tolist()
+        return [float(v) for v in vals] if len(vals) >= 2 else []
+    except Exception:
+        return []
+
+
+def _extract_auto_cagr_from_stock(stock) -> tuple[float, float, float, bool]:
+    """Fallback CAGR otomatis dari annual report yfinance (live, tidak perlu simpan JSON)."""
+    try:
+        financials = stock.financials
+    except Exception:
+        financials = None
+
+    ni = _extract_financial_series(financials, ["Net Income", "NetIncome", "Net Income Common Stockholders"])
+    rev = _extract_financial_series(financials, ["Total Revenue", "TotalRevenue", "Operating Revenue"])
+    eps = _extract_eps_series_for_auto_cagr(stock, financials)
+
+    if len(ni) < 2 or len(rev) < 2 or len(eps) < 2:
+        return 0.0, 0.0, 0.0, False
+
+    return compute_cagr(ni), compute_cagr(rev), compute_cagr(eps), True
 
 
 def _estimate_dividend_growth_from_history(stock, years: int = 5):
@@ -657,11 +737,7 @@ def _apply_fuzzy_ahp_topsis_buy_decision(df: pd.DataFrame) -> pd.DataFrame:
 
     cagr_items = _load_cagr_items()
 
-    # ── Fase 1: Kumpulkan semua CagrResult untuk evaluasi batch ──
-    base_results = []       # Semua ticker, tanpa CAGR (mode dashboard)
-    final_results = []      # Ticker yang punya CAGR saja
-    final_ticker_set = set()
-    row_data = []           # Simpan data per-row untuk mapping nanti
+    _QUALITY_GATE_THRESHOLD = 0.4  # Quality di bawah ini → downgrade BUY ke NO BUY
 
     for idx, row in df.iterrows():
         ticker = str(row.get("Ticker") or row.get("Name") or "-")
@@ -672,11 +748,10 @@ def _apply_fuzzy_ahp_topsis_buy_decision(df: pd.DataFrame) -> pd.DataFrame:
         div_yield = float(row.get("Dividend Yield (%)") or 0.0)
         per = float(row.get("PER NOW") or 0.0)
         down_from_high = float(row.get("Down From High 52 (%)") or 0.0)
-        quality_score = float(row.get("Quality Score") or 0.0)
+        qscore = float(row.get("Quality Score") or 0.0)
         discount_score = float(row.get("Discount Score") or 0.0)
 
-        # Base CagrResult (no CAGR)
-        base_results.append(CagrResult(
+        base_result = CagrResult(
             ticker=ticker,
             cagr_net_income=0.0,
             cagr_revenue=0.0,
@@ -687,14 +762,37 @@ def _apply_fuzzy_ahp_topsis_buy_decision(df: pd.DataFrame) -> pd.DataFrame:
             div_yield=div_yield,
             per=per,
             down_from_high=down_from_high,
-            quality_score=quality_score,
+            quality_score=qscore,
             discount_score=discount_score,
-        ))
+        )
+        base_eval = evaluate_cagr_methods([base_result], use_cagr=False)
+        base_info = (((base_eval.get("methods") or {}).get("FUZZY_AHP_TOPSIS") or {}).get(ticker)) or {}
+        base_decision = base_info.get("decision")
+        base_score = base_info.get("score")
+        base_category = base_info.get("category")
 
-        # Final CagrResult (with CAGR jika tersedia)
         cagr_net, cagr_rev, cagr_eps, has_cagr = _extract_cagr_for_ticker(ticker, cagr_items)
+        cagr_source = "saved"
+
+        if not has_cagr:
+            auto_net = pd.to_numeric(row.get("Auto CAGR Net Income (%)"), errors="coerce")
+            auto_rev = pd.to_numeric(row.get("Auto CAGR Revenue (%)"), errors="coerce")
+            auto_eps = pd.to_numeric(row.get("Auto CAGR EPS (%)"), errors="coerce")
+            if not pd.isna(auto_net) and not pd.isna(auto_rev) and not pd.isna(auto_eps):
+                cagr_net = float(auto_net)
+                cagr_rev = float(auto_rev)
+                cagr_eps = float(auto_eps)
+                has_cagr = True
+                cagr_source = "auto_live"
+
+        df.at[idx, "CAGR Applied"] = bool(has_cagr)
+        df.at[idx, "CAGR Source"] = cagr_source if has_cagr else "none"
         if has_cagr:
-            final_results.append(CagrResult(
+            df.at[idx, "CAGR Net Income Used (%)"] = float(cagr_net)
+            df.at[idx, "CAGR Revenue Used (%)"] = float(cagr_rev)
+            df.at[idx, "CAGR EPS Used (%)"] = float(cagr_eps)
+        if has_cagr:
+            final_result = CagrResult(
                 ticker=ticker,
                 cagr_net_income=cagr_net,
                 cagr_revenue=cagr_rev,
@@ -705,48 +803,11 @@ def _apply_fuzzy_ahp_topsis_buy_decision(df: pd.DataFrame) -> pd.DataFrame:
                 div_yield=div_yield,
                 per=per,
                 down_from_high=down_from_high,
-                quality_score=quality_score,
+                quality_score=qscore,
                 discount_score=discount_score,
-            ))
-            final_ticker_set.add(ticker)
-
-        row_data.append({
-            "idx": idx,
-            "ticker": ticker,
-            "has_cagr": has_cagr,
-            "quality_score": quality_score,
-            "discount_score": discount_score,
-        })
-
-    # ── Fase 2: Evaluasi batch ──
-    base_eval = evaluate_cagr_methods(base_results, use_cagr=False)
-
-    if final_results:
-        final_eval = evaluate_cagr_methods(final_results, use_cagr=True)
-    else:
-        final_eval = None
-
-    # ── Fase 3: Map hasil kembali ke DataFrame ──
-    base_hybrid = (base_eval.get("methods") or {}).get("FUZZY_AHP_TOPSIS") or {}
-    final_hybrid = ((final_eval.get("methods") or {}).get("FUZZY_AHP_TOPSIS") or {}) if final_eval else {}
-
-    _QUALITY_GATE_THRESHOLD = 0.4  # Quality di bawah ini → downgrade BUY ke NO BUY
-
-    for rd in row_data:
-        idx = rd["idx"]
-        ticker = rd["ticker"]
-        has_cagr = rd["has_cagr"]
-        qscore = rd["quality_score"]
-
-        # Base signal (no_cagr)
-        base_info = base_hybrid.get(ticker) or {}
-        base_decision = base_info.get("decision")
-        base_score = base_info.get("score")
-        base_category = base_info.get("category")
-
-        # Final signal (with_cagr jika tersedia, otherwise sama dengan base)
-        if has_cagr:
-            final_info = final_hybrid.get(ticker) or {}
+            )
+            final_eval = evaluate_cagr_methods([final_result], use_cagr=True)
+            final_info = (((final_eval.get("methods") or {}).get("FUZZY_AHP_TOPSIS") or {}).get(ticker)) or {}
         else:
             final_info = base_info
 
@@ -918,6 +979,8 @@ def get_stock_data(ticker_list):
         payout_ratio = _normalize_percent_value(payout_ratio_raw)
         div_growth = _normalize_percent_value(div_growth_raw)
 
+        auto_cagr_net, auto_cagr_rev, auto_cagr_eps, auto_cagr_has = _extract_auto_cagr_from_stock(stock)
+
         quality = _compute_quality_profile(info=info, roe_pct=roe, market_cap=float(market_cap or 0.0))
 
         # Fallback: beberapa ticker tidak mengisi `dividendGrowth` secara konsisten
@@ -1063,6 +1126,9 @@ def get_stock_data(ticker_list):
             'Dividend Yield (%)': div_yield,
             'Dividend Growth (%)': round(div_growth, 2) if div_growth is not None else None,
             'Payout Ratio (%)': round(payout_ratio, 2) if payout_ratio is not None else None,
+            'Auto CAGR Net Income (%)': round(float(auto_cagr_net), 3) if auto_cagr_has else None,
+            'Auto CAGR Revenue (%)': round(float(auto_cagr_rev), 3) if auto_cagr_has else None,
+            'Auto CAGR EPS (%)': round(float(auto_cagr_eps), 3) if auto_cagr_has else None,
             'Decision Buy': buy_decision,
             'Decision Discount': discount_label,
             'Discount Score': round(float(discount_score), 3),

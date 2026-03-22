@@ -7,7 +7,7 @@
   "private": true,
   "scripts": {
     "start": "concurrently \"npm:dev:backend\" \"npm:dev:electron\"",
-    "dev:backend": "backend\\venv\\Scripts\\python.exe -m uvicorn backend.fastapi_app:app --reload --port 8000",
+    "dev:backend": "backend\\venv\\Scripts\\python.exe -m uvicorn backend.fastapi_app:app --reload --reload-exclude data.json --reload-exclude cagr_data.json --reload-exclude thresholds.json --port 8000",
     "dev:electron": "electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make",

@@ -140,6 +140,9 @@ function buildCardHtml(ticker, s) {
   const finalHybridScore = finalHybridScoreValue != null ? finalHybridScoreValue.toFixed(3) : '-';
   const hybridCategory = s['Hybrid Category'] ?? '-';
   const finalHybridCategory = s['Final Hybrid Category'] ?? hybridCategory;
+  const finalHybridMode = s['Final Hybrid Mode'] ?? '-';
+  const cagrApplied = s['CAGR Applied'] === true ? 'Yes' : 'No';
+  const cagrSource = s['CAGR Source'] ?? '-';
 
   // Determine accent border color based on execution decision
   const accentClass = executionDecision === 'BUY'
@@ -293,6 +296,18 @@ function buildCardHtml(ticker, s) {
         <div class="flex justify-between gap-2 text-[10px]">
           <span class="text-slate-400">Final Category</span>
           <span class="font-medium text-emerald-300">${finalHybridCategory}</span>
+        </div>
+        <div class="flex justify-between gap-2 text-[10px]">
+          <span class="text-slate-400">Final Mode</span>
+          <span class="font-medium text-slate-300">${finalHybridMode}</span>
+        </div>
+        <div class="flex justify-between gap-2 text-[10px]">
+          <span class="text-slate-400">CAGR Applied</span>
+          <span class="font-medium ${cagrApplied === 'Yes' ? 'text-emerald-300' : 'text-amber-300'}">${cagrApplied}</span>
+        </div>
+        <div class="flex justify-between gap-2 text-[10px]">
+          <span class="text-slate-400">CAGR Source</span>
+          <span class="font-medium text-slate-300">${cagrSource}</span>
         </div>
         <div class="flex justify-between gap-2 text-[10px]">
           <span class="text-slate-400">Quality Score</span>
@@ -506,7 +521,7 @@ async function loadSingleTicker(tickerRaw, options = {}) {
       return;
     }
 
-    const s = data[0];
+    let s = data[0];
 
     const isRateLimited = s['Is Rate Limited'] === true;
     if (isRateLimited) {
@@ -539,11 +554,37 @@ async function loadSingleTicker(tickerRaw, options = {}) {
 
         if (!annualReady && !directReady) {
           // No manual CAGR yet — auto-fetch from yfinance and persist
-          await fetch('http://127.0.0.1:8000/decision-cagr-auto', {
+          const autoRes = await fetch('http://127.0.0.1:8000/decision-cagr-auto', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ items: [{ ticker }] }),
           });
+          // Re-fetch stock data so scores include CAGR
+          if (autoRes.ok) {
+            try {
+              const refreshRes = await fetch(`http://127.0.0.1:8000/stocks?tickers=${encodeURIComponent(ticker)}`);
+              if (refreshRes.ok) {
+                const refreshData = await refreshRes.json();
+                if (Array.isArray(refreshData) && refreshData.length > 0) {
+                  s = refreshData[0];
+                }
+              }
+            } catch (_) { /* refresh failure non-fatal */ }
+          }
+        } else if (annualReady || directReady) {
+          // CAGR data exists but the initial /stocks call may not have used it
+          // (e.g. auto_live extraction failed). Re-fetch to ensure scores include CAGR.
+          if (s['CAGR Applied'] !== true) {
+            try {
+              const refreshRes = await fetch(`http://127.0.0.1:8000/stocks?tickers=${encodeURIComponent(ticker)}`);
+              if (refreshRes.ok) {
+                const refreshData = await refreshRes.json();
+                if (Array.isArray(refreshData) && refreshData.length > 0) {
+                  s = refreshData[0];
+                }
+              }
+            } catch (_) { /* refresh failure non-fatal */ }
+          }
         }
       }
     } catch (e) {
@@ -728,8 +769,8 @@ function init() {
       if (!article) return;
       const t = article.getAttribute('data-ticker');
       if (!t) return;
-      const url = `/detailed.html?ticker=${encodeURIComponent(t)}`;
-      window.location.href = url;
+      sessionStorage.setItem('currentTicker', t);
+      window.location.href = 'detailed.html';
     });
   }
 

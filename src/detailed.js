@@ -47,7 +47,8 @@ function updateCagrInfoPanel(meta = {}) {
 
 function getQueryTicker() {
   const params = new URLSearchParams(window.location.search);
-  const t = params.get('ticker');
+  let t = params.get('ticker');
+  if (!t) t = sessionStorage.getItem('currentTicker');
   return t ? t.trim() : '';
 }
 
@@ -974,7 +975,7 @@ function init() {
 
   if (backButton) {
     backButton.addEventListener('click', () => {
-      window.location.href = '/index.html';
+      window.location.href = 'index.html';
     });
   }
 
@@ -996,7 +997,7 @@ function init() {
         }
         if (statusEl) statusEl.textContent = `Entry ${t} berhasil dihapus. Kembali ke dashboard...`;
         setTimeout(() => {
-          window.location.href = '/index.html';
+          window.location.href = 'index.html';
         }, 600);
       } catch (err) {
         if (statusEl) statusEl.textContent = `Gagal hapus entry: ${String(err)}`;

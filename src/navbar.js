@@ -4,10 +4,10 @@
  */
 
 const NAV_ITEMS = [
-  { href: '/index.html', label: 'Dashboard', id: 'dashboard', icon: '📊' },
-  { href: '/ranking.html', label: 'Ranking', id: 'ranking', icon: '🏆' },
-  { href: '/riskmgmt.html', label: 'Risk Mgmt', id: 'riskmgmt', icon: '🛡️' },
-  { href: '/config.html', label: 'Config', id: 'config', icon: '⚙️' },
+  { href: 'index.html', label: 'Dashboard', id: 'dashboard', icon: '📊' },
+  { href: 'ranking.html', label: 'Ranking', id: 'ranking', icon: '🏆' },
+  { href: 'riskmgmt.html', label: 'Risk Mgmt', id: 'riskmgmt', icon: '🛡️' },
+  { href: 'config.html', label: 'Config', id: 'config', icon: '⚙️' },
 ];
 
 export function initNavbar() {

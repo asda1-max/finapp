@@ -1,4 +1,4 @@
-# DECISION MAKING SYSTEM — DOKUMENTASI DESAIN
+z# DECISION MAKING SYSTEM — DOKUMENTASI DESAIN
 # File: decision_making.py
 # Terakhir diupdate: Maret 2026
 # Author: (kamu)
