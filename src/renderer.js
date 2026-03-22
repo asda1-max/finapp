@@ -151,6 +151,16 @@ function buildCardHtml(ticker, s) {
       ? 'card-accent-hold'
       : 'card-accent-nobuy';
 
+  let safetyBadgeHtml = '';
+  if (safetyCheck.includes('[SOLVENCY HOLD]')) {
+    safetyBadgeHtml = `<div class="mt-2 mb-1 p-1.5 rounded bg-yellow-950/40 border border-yellow-700/50 text-[10px] text-yellow-400 font-bold flex items-center justify-center gap-1.5 w-full">
+        ⚠️ Solvency Warning: High Leverage & Low Liquidity
+    </div>`;
+  } else if (safetyCheck.includes('[DANGER NO BUY]')) {
+    safetyBadgeHtml = `<div class="mt-2 mb-1 p-1.5 rounded bg-red-950/40 border border-red-700/50 text-[10px] text-red-500 font-bold flex items-center justify-center gap-1.5 w-full">
+        🚨 DANGER: Toxic Debt Trap Avoided
+    </div>`;
+  }
 
 
   return `
@@ -265,6 +275,7 @@ function buildCardHtml(ticker, s) {
           <span class="text-slate-400">Payout Penalty</span>
           <span class="font-medium">${payoutPenalty}</span>
         </div>
+        ${safetyBadgeHtml}
         <div class="divider-gradient my-2"></div>
         <div class="flex justify-between gap-2 text-[10px]">
           <span class="text-slate-400">Base Signal (Hybrid)</span>

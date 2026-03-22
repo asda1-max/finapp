@@ -935,6 +935,32 @@ def _apply_payout_ratio_safety_check(df: pd.DataFrame) -> pd.DataFrame:
     df["Execution Decision"] = out_decisions
     df["Safety Check"] = out_notes
     df["Payout Penalty"] = out_penalties
+
+    # --- SOLVENCY QUALITY GATE ---
+    # Downgrade decision if Debt-to-Equity is dangerously high and liquidity is low
+    for idx, row in df.iterrows():
+        # Only evaluate if the current execution decision is BUY
+        if df.at[idx, "Execution Decision"] == "BUY":
+            de_raw = pd.to_numeric(row.get("Debt To Equity (%)"), errors="coerce")
+            cr_raw = pd.to_numeric(row.get("Current Ratio"), errors="coerce")
+            
+            de_pct = float(de_raw) if not pd.isna(de_raw) else 0.0
+            cur_ratio = float(cr_raw) if not pd.isna(cr_raw) else 1.0 # assume safe if nan
+            sector_lower = str(row.get("Sector") or "").lower()
+            is_fin = sector_lower in ["financial services", "financials", "bank"]
+
+            # Banking/Financials naturally run high leverage, exclude them from standard D/E penalty
+            if not is_fin:
+                current_note = str(df.at[idx, "Safety Check"])
+                # If critically leveraged (D/E > 200% AND weak liquidity CR < 1.0)
+                if de_pct > 200.0 and cur_ratio < 1.0:
+                    df.at[idx, "Execution Decision"] = "HOLD"
+                    df.at[idx, "Safety Check"] = f"[SOLVENCY HOLD] D/E {de_pct:.0f}% & CR {cur_ratio:.2f}. " + current_note
+                # If insanely leveraged (D/E > 350%) -> Toxic debt trap
+                elif de_pct > 350.0:
+                    df.at[idx, "Execution Decision"] = "NO BUY"
+                    df.at[idx, "Safety Check"] = f"[DANGER NO BUY] Toxic Debt: D/E {de_pct:.0f}%. " + current_note
+
     return df
 
 
@@ -1020,13 +1046,19 @@ def get_stock_data(ticker_list):
             mos_pbv = mos_graham
 
         # Hybrid MOS dengan bobot sektor:
-        # - Perbankan: PBV lebih dominan.
-        # - Non-perbankan: Graham lebih dominan.
-        is_bank = bool(quality.get('is_bank'))
+        # - Perbankan: PBV lebih dominan (Graham kurang relevan)
+        # - Teknologi/Aset Ringan: Graham sangat tidak relevan (Intangible assets besar). Gunakan PBV historis atau metriks lain.
+        # - Sektor Lain: Graham lebih dominan.
+        sector_lower = str(info.get('sector') or "").lower()
+        is_bank = bool(quality.get('is_bank')) or sector_lower in ["financial services", "financials", "bank"]
+        is_tech = sector_lower in ["technology", "communication services"]
+
         has_graham = np.isfinite(mos_graham) and graham > 0
         has_pbv = np.isfinite(mos_pbv)
 
-        if has_graham and has_pbv:
+        if is_tech and has_pbv:
+            mos = float(mos_pbv) # Completely disregard Graham for Tech
+        elif has_graham and has_pbv:
             if is_bank:
                 mos = (0.2 * mos_graham) + (0.8 * mos_pbv)
             else:
