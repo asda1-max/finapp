@@ -10,6 +10,45 @@ function updateTickerJson() {
   // panel JSON sudah dihapus dari UI, fungsi dibiarkan no-op untuk kompatibilitas.
 }
 
+// --- Terminal Loader Utils ---
+let _terminalStartMs = 0;
+
+function updateTerminalProgress(current, total) {
+  const terminalLoader = document.getElementById('terminal-loader');
+  const terminalProgressBar = document.getElementById('terminal-progress-bar');
+  const terminalPercent = document.getElementById('terminal-percent');
+  if (!terminalLoader || terminalLoader.classList.contains('hidden') || !terminalProgressBar || !terminalPercent) return;
+  
+  const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+  terminalPercent.textContent = `${pct}%`;
+  
+  const barLen = 60;
+  const fillLen = Math.floor((pct / 100) * barLen);
+  const fill = '>'.repeat(fillLen);
+  const empty = '.'.repeat(barLen - fillLen);
+  terminalProgressBar.textContent = `[${fill}${empty}]`;
+}
+
+function appendTerminalLog(msg, type = 'info') {
+  const terminalLog = document.getElementById('terminal-log');
+  if (!terminalLog) return;
+  const div = document.createElement('div');
+  div.className = 'font-mono transition-colors';
+  
+  if (type === 'error') div.classList.add('text-rose-400');
+  else if (type === 'success') div.classList.add('text-emerald-400');
+  else if (type === 'warning') div.classList.add('text-amber-400', 'animate-pulse');
+  else div.classList.add('text-slate-400');
+  
+  const time = new Date().toLocaleTimeString('id-ID', { hour12: false });
+  div.textContent = `[${time}] ${msg}`;
+  terminalLog.appendChild(div);
+  
+  // Smooth scroll to bottom
+  terminalLog.scrollTo({ top: terminalLog.scrollHeight, behavior: 'smooth' });
+}
+// -----------------------------
+
 function formatNumber(value) {
   if (value == null || Number.isNaN(Number(value))) return '-';
   const num = Number(value);
@@ -51,8 +90,7 @@ function isLikelyInvalidTicker(stock, ticker) {
   return noMarketData && unresolvedName;
 }
 
-function buildCardHtml(ticker, s, options = {}) {
-  const { cagrReady = false } = options;
+function buildCardHtml(ticker, s) {
   const name = s['Name'] ?? '-';
   const sector = s['Sector'] ?? '-';
   const price = formatNumber(s['Price']);
@@ -110,14 +148,7 @@ function buildCardHtml(ticker, s, options = {}) {
       ? 'card-accent-hold'
       : 'card-accent-nobuy';
 
-  const cagrWarningHtml = cagrReady
-    ? ''
-    : `
-      <div class="mt-1.5 rounded-lg border border-amber-700/30 bg-amber-950/30 px-2.5 py-1.5 text-[10px] text-amber-300 flex items-center gap-1.5">
-        <span>⚠️</span>
-        <span>CAGR belum diinput. Isi di halaman detailed untuk akurasi lebih baik.</span>
-      </div>
-    `;
+
 
   return `
     <article
@@ -279,7 +310,6 @@ function buildCardHtml(ticker, s, options = {}) {
           <span class="text-slate-400">Safety Check</span>
           <span class="font-medium text-amber-300">${safetyCheck}</span>
         </div>
-        ${cagrWarningHtml}
         <div class="divider-gradient my-1.5"></div>
         <div class="flex justify-between gap-2 text-[10px]">
           <span class="text-slate-400">Diskon</span>
@@ -339,7 +369,7 @@ function renderDashboardCards() {
 
   if (mode !== 'sector') {
     for (const [ticker, payload] of entries) {
-      const html = buildCardHtml(ticker, payload.stock, { cagrReady: payload.cagrReady });
+      const html = buildCardHtml(ticker, payload.stock);
       cardsEl.insertAdjacentHTML('beforeend', html);
     }
     return;
@@ -368,7 +398,7 @@ function renderDashboardCards() {
 
     const rows = groups.get(sector) || [];
     for (const row of rows) {
-      const html = buildCardHtml(row.ticker, row.payload.stock, { cagrReady: row.payload.cagrReady });
+      const html = buildCardHtml(row.ticker, row.payload.stock);
       const cardWrap = document.createElement('div');
       cardWrap.className = 'w-full max-w-sm';
       cardWrap.innerHTML = html.trim();
@@ -409,31 +439,58 @@ async function loadSavedTickers() {
     tickerCache.clear();
     cardsEl.innerHTML = '';
 
-    for (const t of tickers) {
-      await loadSingleTicker(t, { skipSave: true });
+    const terminalLoader = document.getElementById('terminal-loader');
+    const terminalLog = document.getElementById('terminal-log');
+    if (terminalLoader && terminalLog) {
+      terminalLoader.classList.remove('hidden');
+      terminalLoader.classList.add('flex');
+      terminalLog.innerHTML = '';
+      updateTerminalProgress(0, tickers.length);
+      appendTerminalLog(`[SYSTEM] Initiating parallel load for ${tickers.length} tickers...`, 'warning');
+    }
+
+    let doneCount = 0;
+    await Promise.allSettled(
+      tickers.map(async (t) => {
+        await loadSingleTicker(t, { skipSave: true, silent: true, useTerminal: true });
+        doneCount += 1;
+        if (statusEl) {
+          statusEl.textContent = `Memuat saham... (${doneCount}/${tickers.length})`;
+        }
+        updateTerminalProgress(doneCount, tickers.length);
+      })
+    );
+
+    if (terminalLoader) {
+      appendTerminalLog(`[SYSTEM] All tickers processed. Rendering dashboard...`, 'success');
+      setTimeout(() => {
+        terminalLoader.classList.add('hidden');
+        terminalLoader.classList.remove('flex');
+      }, 1200);
     }
 
     renderDashboardCards();
-    statusEl.textContent = `Menampilkan ${tickers.length} saham dari data.json.`;
+    statusEl.textContent = `Menampilkan ${tickerCache.size} saham dari data.json.`;
   } catch (error) {
     statusEl.textContent = `Gagal memuat saham tersimpan: ${String(error)}`;
   }
 }
 async function loadSingleTicker(tickerRaw, options = {}) {
   const ticker = (tickerRaw || '').trim();
-  const { skipSave = false } = options;
+  const { skipSave = false, silent = false, useTerminal = false } = options;
   const statusEl = document.getElementById('status');
   const cardsEl = document.getElementById('stocks-cards');
 
   if (!statusEl || !cardsEl) return;
 
   if (!ticker) {
-    statusEl.textContent = 'Masukkan ticker terlebih dahulu, misal: BBCA.JK';
+    if (!silent) statusEl.textContent = 'Masukkan ticker terlebih dahulu, misal: BBCA.JK';
     return;
   }
 
   try {
-    statusEl.textContent = `Memuat data untuk ${ticker}...`;
+    if (useTerminal) appendTerminalLog(`LOADING Tickers : ${ticker}`, 'info');
+    if (!silent) statusEl.textContent = `Memuat data untuk ${ticker}...`;
 
     const url = `http://127.0.0.1:8000/stocks?tickers=${encodeURIComponent(ticker)}`;
     const response = await fetch(url);
@@ -444,19 +501,27 @@ async function loadSingleTicker(tickerRaw, options = {}) {
     const data = await response.json();
 
     if (!Array.isArray(data) || data.length === 0) {
-      statusEl.textContent = `Tidak ada data untuk ticker ${ticker}.`;
+      if (!silent) statusEl.textContent = `Tidak ada data untuk ticker ${ticker}.`;
+      if (useTerminal) appendTerminalLog(`ERROR : No data returned for ${ticker}`, 'error');
       return;
     }
 
     const s = data[0];
 
-    if (isLikelyInvalidTicker(s, ticker)) {
-      statusEl.textContent = `Ticker ${ticker} tidak valid / data tidak ditemukan.`;
+    const isRateLimited = s['Is Rate Limited'] === true;
+    if (isRateLimited) {
+      if (!silent) statusEl.textContent = `YFinance API Limit tercapai saat memuat ${ticker}. Coba beberapa saat lagi.`;
+      if (useTerminal) appendTerminalLog(`CRIT_ERR: YFinance API Rate Limit Reached for ${ticker}!`, 'error');
       return;
     }
 
-    // Cek apakah user sudah menginput CAGR untuk ticker ini
-    let cagrReady = false;
+    if (isLikelyInvalidTicker(s, ticker)) {
+      if (!silent) statusEl.textContent = `Ticker ${ticker} tidak valid / data tidak ditemukan.`;
+      if (useTerminal) appendTerminalLog(`ERROR : Ticker ${ticker} is invalid or delisted.`, 'error');
+      return;
+    }
+
+    // If no CAGR stored yet, trigger auto-fetch from yfinance and save to backend
     try {
       const cagrRes = await fetch(`http://127.0.0.1:8000/cagr-raw/${encodeURIComponent(ticker)}`);
       if (cagrRes.ok) {
@@ -465,7 +530,6 @@ async function loadSingleTicker(tickerRaw, options = {}) {
         const rev = Array.isArray(cagrJson?.revenue) ? cagrJson.revenue : [];
         const epsData = Array.isArray(cagrJson?.eps) ? cagrJson.eps : [];
         const annualReady = ni.length >= 2 && rev.length >= 2 && epsData.length >= 2;
-
         const hasNumeric = (v) => v !== null && v !== undefined && !Number.isNaN(Number(v));
         const directReady =
           hasNumeric(cagrJson?.cagr_years) && Number(cagrJson?.cagr_years) >= 1 &&
@@ -473,14 +537,24 @@ async function loadSingleTicker(tickerRaw, options = {}) {
           hasNumeric(cagrJson?.cagr_revenue) &&
           hasNumeric(cagrJson?.cagr_eps);
 
-        cagrReady = annualReady || directReady;
+        if (!annualReady && !directReady) {
+          // No manual CAGR yet — auto-fetch from yfinance and persist
+          await fetch('http://127.0.0.1:8000/decision-cagr-auto', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items: [{ ticker }] }),
+          });
+        }
       }
     } catch (e) {
-      cagrReady = false;
+      // Auto-fetch failure is non-fatal; scoring will fall back to no-CAGR mode
     }
 
-    tickerCache.set(ticker, { stock: s, cagrReady });
-    renderDashboardCards();
+    tickerCache.set(ticker, { stock: s });
+    if (useTerminal) appendTerminalLog(`SUCCESS : ${ticker} data loaded & integrated.`, 'success');
+
+    // In silent/parallel mode the caller does a single final render; skip intermediate renders.
+    if (!silent) renderDashboardCards();
 
     if (!skipSave) {
       searchedTickers.add(ticker);
@@ -497,9 +571,10 @@ async function loadSingleTicker(tickerRaw, options = {}) {
       }
     }
 
-    statusEl.textContent = `Berhasil menambahkan card untuk ${ticker}.`;
+    if (!silent) statusEl.textContent = `Berhasil menambahkan card untuk ${ticker}.`;
   } catch (error) {
-    statusEl.textContent = `Gagal mengambil data untuk ${ticker}: ${String(error)}`;
+    if (useTerminal) appendTerminalLog(`ERROR : Failed fetching ${ticker} -> ${String(error)}`, 'error');
+    if (!silent) statusEl.textContent = `Gagal mengambil data untuk ${ticker}: ${String(error)}`;
   }
 }
 
@@ -748,48 +823,51 @@ function init() {
       if (batchProgress) batchProgress.classList.remove('hidden');
       if (batchResult) { batchResult.classList.add('hidden'); batchResult.innerHTML = ''; }
 
-      let success = 0;
-      let failed = 0;
-      let skipped = 0;
-      const failedTickers = [];
+      const alreadyLoaded = tickers.filter(t => tickerCache.has(t));
+      const newTickers = tickers.filter(t => !tickerCache.has(t));
 
-      for (let i = 0; i < tickers.length; i++) {
-        const t = tickers[i];
-        const pct = Math.round(((i + 1) / tickers.length) * 100);
+      // ── Phase 1: Save all new tickers to backend (no yfinance, just data.json) ──
+      if (batchProgressText) batchProgressText.textContent = `Menyimpan ${newTickers.length} ticker ke daftar...`;
+      if (batchProgressBar) batchProgressBar.style.width = '10%';
+      if (batchProgressCount) batchProgressCount.textContent = `0/${newTickers.length}`;
 
-        if (batchProgressText) batchProgressText.textContent = `Memuat ${t}...`;
-        if (batchProgressCount) batchProgressCount.textContent = `${i + 1}/${tickers.length}`;
-        if (batchProgressBar) batchProgressBar.style.width = `${pct}%`;
-
-        // Skip if already loaded
-        if (tickerCache.has(t)) {
-          skipped++;
-          continue;
-        }
-
+      let savedCount = 0;
+      for (const t of newTickers) {
         try {
-          await loadSingleTicker(t);
-          if (tickerCache.has(t)) {
-            success++;
-          } else {
-            failed++;
-            failedTickers.push(t);
-          }
+          await fetch('http://127.0.0.1:8000/saved-tickers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ticker: t }),
+          });
         } catch {
-          failed++;
-          failedTickers.push(t);
+          // ignore individual save errors; loadSavedTickers will only load what's saved
         }
+        savedCount++;
+        if (batchProgressCount) batchProgressCount.textContent = `${savedCount}/${newTickers.length}`;
       }
 
-      // Show results
-      if (batchProgressText) batchProgressText.textContent = 'Selesai!';
+      if (batchProgressBar) batchProgressBar.style.width = '30%';
+
+      // ── Phase 2: Reload all saved tickers in parallel (handles yfinance fetching) ──
+      if (batchProgressText) batchProgressText.textContent = 'Memuat data saham secara paralel...';
+
+      // Intercept loadSavedTickers progress to update the batch progress bar
+      const prevSize = tickerCache.size;
+      await loadSavedTickers();
+
       if (batchProgressBar) batchProgressBar.style.width = '100%';
+      if (batchProgressText) batchProgressText.textContent = 'Selesai!';
+
+      // ── Results ──
+      const success = newTickers.filter(t => tickerCache.has(t)).length;
+      const failed = newTickers.length - success;
+      const failedTickers = newTickers.filter(t => !tickerCache.has(t));
 
       if (batchResult) {
         let html = '<div class="space-y-1">';
         html += `<div class="text-emerald-300">✅ Berhasil: ${success} ticker</div>`;
-        if (skipped > 0) html += `<div class="text-sky-300">⏭️ Dilewati (sudah ada): ${skipped} ticker</div>`;
-        if (failed > 0) html += `<div class="text-rose-300">❌ Gagal: ${failed} ticker (${failedTickers.join(', ')})</div>`;
+        if (alreadyLoaded.length > 0) html += `<div class="text-sky-300">⏭️ Dilewati (sudah ada): ${alreadyLoaded.length} ticker</div>`;
+        if (failed > 0) html += `<div class="text-rose-300">❌ Gagal load: ${failed} ticker (${failedTickers.join(', ')})</div>`;
         html += '</div>';
         batchResult.innerHTML = html;
         batchResult.classList.remove('hidden');

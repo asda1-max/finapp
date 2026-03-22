@@ -885,10 +885,14 @@ def get_stock_data(ticker_list):
         stock = yf.Ticker(symbol)
 
         # Beberapa field dari yfinance bisa None, jadi kita normalisasi dulu
+        is_rate_limited = False
         try:
             info = stock.get_info()
-        except AttributeError:
-            info = getattr(stock, "info", {}) or {}
+        except Exception as e:
+            if 'RateLimitError' in type(e).__name__ or 'Too Many Requests' in str(e) or '429' in str(e):
+                is_rate_limited = True
+            print(f"Error mengambil data '{symbol}': {e}")
+            info = {}
         
         # 1. Data Dasar & Harga (Tabel Kuning)
         current_price = info.get('currentPrice') or 0
@@ -1063,7 +1067,7 @@ def get_stock_data(ticker_list):
             'Decision Discount': discount_label,
             'Discount Score': round(float(discount_score), 3),
             'Decision Dividend': dividend_label,
-            
+            'Is Rate Limited': is_rate_limited
         }
         all_data.append(data)
     

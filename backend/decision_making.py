@@ -4,11 +4,41 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Sequence
 import json
+import threading
 
 import numpy as np
 
 
 THRESHOLDS_JSON_PATH = Path(__file__).with_name("thresholds.json")
+
+# ---------------------------------------------------------------------------
+# Thresholds cache — avoids re-reading thresholds.json on every scoring call.
+# The cache is invalidated by _invalidate_thresholds_cache() which fastapi_app
+# calls after each successful write to thresholds.json.
+# ---------------------------------------------------------------------------
+_THRESHOLDS_CACHE: dict | None = None
+_THRESHOLDS_CACHE_LOCK = threading.Lock()
+
+
+def _invalidate_thresholds_cache() -> None:
+    """Force the next read of thresholds.json to hit the filesystem."""
+    global _THRESHOLDS_CACHE
+    with _THRESHOLDS_CACHE_LOCK:
+        _THRESHOLDS_CACHE = None
+
+
+def _load_thresholds_cached() -> dict:
+    """Return parsed thresholds.json, using the module-level cache."""
+    global _THRESHOLDS_CACHE
+    with _THRESHOLDS_CACHE_LOCK:
+        if _THRESHOLDS_CACHE is not None:
+            return _THRESHOLDS_CACHE
+        try:
+            raw = json.loads(THRESHOLDS_JSON_PATH.read_text(encoding="utf-8")) if THRESHOLDS_JSON_PATH.exists() else {}
+        except (json.JSONDecodeError, OSError):
+            raw = {}
+        _THRESHOLDS_CACHE = raw if isinstance(raw, dict) else {}
+        return _THRESHOLDS_CACHE
 
 
 # Sentinel untuk membedakan "data tidak tersedia" vs "nilainya memang 0".
@@ -407,10 +437,7 @@ def _hybrid_config(use_cagr: bool) -> tuple[np.ndarray, float, float, float]:
     weights = default_weights.copy()
     recommended_thr, buy_thr, risk_thr = default_thr
 
-    try:
-        raw = json.loads(THRESHOLDS_JSON_PATH.read_text(encoding="utf-8")) if THRESHOLDS_JSON_PATH.exists() else {}
-    except (json.JSONDecodeError, OSError):
-        raw = {}
+    raw = _load_thresholds_cached()
 
     if isinstance(raw, dict):
         w_cfg = raw.get("hybrid_weights") if isinstance(raw.get("hybrid_weights"), dict) else {}
@@ -454,10 +481,7 @@ def _load_method_thresholds(method: str) -> dict:
     Fallback ke dict kosong jika file tidak ada atau method tidak ditemukan.
     Caller bertanggung jawab menyediakan default via .get(key, default).
     """
-    try:
-        raw = json.loads(THRESHOLDS_JSON_PATH.read_text(encoding="utf-8")) if THRESHOLDS_JSON_PATH.exists() else {}
-    except (json.JSONDecodeError, OSError):
-        raw = {}
+    raw = _load_thresholds_cached()
     methods = raw.get("methods") if isinstance(raw.get("methods"), dict) else {}
     cfg = methods.get(method) if isinstance(methods.get(method), dict) else {}
     return cfg

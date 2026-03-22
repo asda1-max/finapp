@@ -11,7 +11,13 @@ import numpy as np
 import yfinance as yf
 
 from backend.data import get_stock_data
-from backend.decision_making import CagrResult, compute_cagr, evaluate_cagr_methods
+from backend.decision_making import (
+    CagrResult,
+    compute_cagr,
+    evaluate_cagr_methods,
+    _invalidate_thresholds_cache,
+    _load_thresholds_cached,
+)
 
 app = FastAPI(title="Saham FastFetch API")
 
@@ -366,17 +372,14 @@ def _extract_auto_cagr_payload(ticker: str) -> dict:
 
 
 def _load_threshold_data() -> dict:
-    if not THRESHOLDS_JSON_PATH.exists():
-        return {}
-    try:
-        raw = json.loads(THRESHOLDS_JSON_PATH.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return {}
-    return raw if isinstance(raw, dict) else {}
+    """Return thresholds.json data using the shared module-level cache."""
+    return _load_thresholds_cached()
 
 
 def _save_threshold_data(payload: dict) -> None:
     THRESHOLDS_JSON_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    # Invalidate the shared thresholds cache so every subsequent read picks up the new values.
+    _invalidate_thresholds_cache()
 
 
 def _default_hybrid_mode_config(use_cagr: bool) -> dict:
