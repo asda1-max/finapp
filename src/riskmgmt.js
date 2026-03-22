@@ -146,11 +146,19 @@ async function calculateAllocation() {
       return;
     }
 
+    const prefVal = document.getElementById('preferred-input')?.value || '';
+    const preferredTickers = prefVal.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+
+    const blkVal = document.getElementById('blacklisted-input')?.value || '';
+    const blacklistedTickers = blkVal.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+
     // Build request body
     const body = {
       profile: selectedProfile,
       total_capital: totalCapital,
       tickers,
+      preferred_tickers: preferredTickers,
+      blacklisted_tickers: blacklistedTickers,
     };
 
     // Add custom fields if custom profile

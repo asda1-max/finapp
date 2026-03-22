@@ -1597,6 +1597,8 @@ class RiskAllocationRequest(BaseModel):
     custom_experimental_pct: float = 0
     custom_cash_reserve_pct: float = 10
     custom_max_single_exposure_pct: float = 25
+    preferred_tickers: List[str] = []
+    blacklisted_tickers: List[str] = []
 
 
 _RISK_PROFILES = {
@@ -1741,15 +1743,25 @@ async def risk_allocation(payload: RiskAllocationRequest) -> dict:
     df = get_stock_data(tickers)
     stock_data = df.to_dict(orient="records") if df is not None else []
 
+    # Filter tickers
+    blacklisted_set = {t.upper().strip() for t in (payload.blacklisted_tickers or []) if t.strip()}
+    preferred_set = {t.upper().strip() for t in (payload.preferred_tickers or []) if t.strip()}
+
     # Klasifikasi tiap ticker
     ticker_buckets: dict = {}  # ticker -> { bucket, stock_data }
     for s in stock_data:
-        t = str(s.get("Ticker") or s.get("Name") or "-")
+        t_raw = str(s.get("Ticker") or s.get("Name") or "-")
+        t = t_raw.upper().strip()
+        
+        if t in blacklisted_set:
+            continue
+            
         bucket = _classify_ticker_bucket(s)
-        ticker_buckets[t] = {
+        ticker_buckets[t_raw] = {
             "bucket": bucket,
+            "is_preferred": (t in preferred_set),
             "price": float(s.get("Price") or 0),
-            "name": str(s.get("Name") or t),
+            "name": str(s.get("Name") or t_raw),
             "sector": str(s.get("Sector") or "-"),
             "quality_score": float(s.get("Quality Score") or 0),
             "quality_label": str(s.get("Quality Label") or "-"),
@@ -1802,25 +1814,28 @@ async def risk_allocation(payload: RiskAllocationRequest) -> dict:
             continue
 
         # ── Sortir berdasarkan Hybrid Score (tertinggi = paling worth it) ──
+        # DAN prioritas Preferred Stocks
         tickers_in_bucket.sort(
-            key=lambda t: ticker_buckets[t]["hybrid_score"],
+            key=lambda t: (ticker_buckets[t]["is_preferred"], ticker_buckets[t]["hybrid_score"]),
             reverse=True,
         )
 
         # ── Strategi alokasi berbeda per bucket ──
-        # Bluechip: GREEDY — prioritas top-ranked, karena bluechip kuat dan stabil
-        # Dividend & Experimental: SPREAD — dibagi merata untuk diversifikasi,
-        #   karena lebih rentan anjlok individual
-        use_greedy = (b == "bluechip")
+        use_greedy_base = (b == "bluechip")
+        use_hybrid_base = (b == "dividend")
 
         remaining_capital = capital_for_bucket
-        capital_per_ticker = capital_for_bucket / len(tickers_in_bucket) if not use_greedy else 0
+        capital_per_ticker = capital_for_bucket / len(tickers_in_bucket)
+        
         bucket_allocated = 0.0
         bucket_ticker_list = []
 
         for rank, t in enumerate(tickers_in_bucket, start=1):
             info = ticker_buckets[t]
             price = info["price"]
+            is_pref = info["is_preferred"]
+            
+            use_greedy = use_greedy_base or is_pref
 
             if price <= 0:
                 bucket_ticker_list.append(t)
@@ -1835,7 +1850,7 @@ async def risk_allocation(payload: RiskAllocationRequest) -> dict:
                     "lots": 0,
                     "shares": 0,
                     "pct_of_total": 0,
-                    "note": "Harga tidak tersedia",
+                    "note": "Harga tidak tersedia" + (" (Preferred)" if is_pref else ""),
                 })
                 continue
 
@@ -1852,14 +1867,16 @@ async def risk_allocation(payload: RiskAllocationRequest) -> dict:
                     "lots": 0,
                     "shares": 0,
                     "pct_of_total": 0,
-                    "note": "Modal bucket sudah habis (rank lebih rendah)",
+                    "note": "Modal bucket sudah habis (rank lebih rendah)" + (" (Preferred)" if is_pref else ""),
                 })
                 continue
 
-            # Greedy: ambil sebanyak mungkin dari sisa modal bucket
-            # Spread: ambil porsi merata, tapi gak boleh lebih dari sisa atau max exposure
+            # Hitung Effective Capital target
             if use_greedy:
                 effective_capital = min(remaining_capital, max_single_capital)
+            elif use_hybrid_base:
+                greedy_cap = min(remaining_capital, max_single_capital)
+                effective_capital = min((capital_per_ticker + greedy_cap) / 2, max_single_capital)
             else:
                 effective_capital = min(capital_per_ticker, remaining_capital, max_single_capital)
 
@@ -1903,7 +1920,7 @@ async def risk_allocation(payload: RiskAllocationRequest) -> dict:
                 "lots": lots,
                 "shares": shares,
                 "pct_of_total": round(pct_of_total, 2),
-                "note": None,
+                "note": "Preferred Priority" if is_pref else None,
             })
 
         bucket_summaries[b] = {
