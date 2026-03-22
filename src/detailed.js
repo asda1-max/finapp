@@ -3,6 +3,46 @@ import './index.css';
 let cagrChart = null;
 let priceChart = null;
 
+function modeDisplay(mode) {
+  if (mode === 'auto') return 'Auto';
+  if (mode === 'direct') return 'Direct';
+  return 'Annual';
+}
+
+function sourceDisplay(source) {
+  if (source === 'auto_annual_report') return 'Annual report (yfinance)';
+  if (source === 'direct_cagr_input') return 'Input CAGR langsung';
+  if (source === 'manual_annual_input') return 'Input annual manual';
+  return source || '-';
+}
+
+function updateCagrInfoPanel(meta = {}) {
+  const modeEl = document.getElementById('cagr-info-mode');
+  const periodEl = document.getElementById('cagr-info-period');
+  const sourceEl = document.getElementById('cagr-info-source');
+  if (!modeEl || !periodEl || !sourceEl) return;
+
+  const mode = meta.inputMode || 'annual';
+  const startYear = meta.periodStartYear;
+  const endYear = meta.periodEndYear;
+  const years = meta.cagrYears;
+
+  let periodText = meta.periodLabel || '-';
+  if (!periodText || periodText === '-') {
+    if (Number.isFinite(Number(startYear)) && Number.isFinite(Number(endYear))) {
+      periodText = `${startYear}-${endYear}`;
+    } else if (mode === 'direct' && Number.isFinite(Number(years)) && Number(years) > 0) {
+      periodText = `${Number(years)} tahun (direct CAGR input)`;
+    } else if (mode === 'annual' && Number.isFinite(Number(years)) && Number(years) > 0) {
+      periodText = `Manual input (${Number(years)} titik)`;
+    }
+  }
+
+  modeEl.textContent = modeDisplay(mode);
+  periodEl.textContent = periodText || '-';
+  sourceEl.textContent = sourceDisplay(meta.periodSource);
+}
+
 function getQueryTicker() {
   const params = new URLSearchParams(window.location.search);
   const t = params.get('ticker');
@@ -104,6 +144,9 @@ function renderFundamentals(ticker, stock) {
   const payoutPenaltyEl = document.getElementById('fund-payout-penalty');
   const execEl = document.getElementById('fund-exec');
   const safetyEl = document.getElementById('fund-safety');
+  const qualityScoreEl = document.getElementById('fund-quality-score');
+  const qualityLabelEl = document.getElementById('fund-quality-label');
+  const qualityVerdictEl = document.getElementById('fund-quality-verdict');
 
   const name = stock['Name'] ?? ticker;
   const price = formatNumber(stock['Price']);
@@ -133,6 +176,10 @@ function renderFundamentals(ticker, stock) {
       : Number(stock['Payout Penalty']).toFixed(2);
   const executionDecision = stock['Execution Decision'] ?? '-';
   const safetyCheck = stock['Safety Check'] ?? '-';
+  const qualityScore =
+    typeof stock['Quality Score'] === 'number' ? stock['Quality Score'].toFixed(3) : '-';
+  const qualityLabel = stock['Quality Label'] ?? '-';
+  const qualityVerdict = stock['Quality Verdict'] ?? '-';
 
   if (nameEl) nameEl.textContent = name;
   if (tickerEl) tickerEl.textContent = ticker;
@@ -160,6 +207,9 @@ function renderFundamentals(ticker, stock) {
   if (payoutPenaltyEl) payoutPenaltyEl.textContent = payoutPenalty;
   if (execEl) execEl.textContent = executionDecision;
   if (safetyEl) safetyEl.textContent = safetyCheck;
+  if (qualityScoreEl) qualityScoreEl.textContent = qualityScore;
+  if (qualityLabelEl) qualityLabelEl.textContent = qualityLabel;
+  if (qualityVerdictEl) qualityVerdictEl.textContent = qualityVerdict;
 
   summary.classList.remove('hidden');
 }
@@ -591,22 +641,25 @@ function toggleInputModeUI(mode) {
   const removeYearBtn = document.getElementById('remove-year-btn');
   const submitBtn = document.querySelector('#cagr-form button[type="submit"]');
   const directSection = document.getElementById('direct-cagr-section');
+  const autoSection = document.getElementById('auto-cagr-section');
   const help = document.getElementById('input-mode-help');
   const annualChartSection = document.getElementById('annual-growth-chart-section');
 
   const isDirect = mode === 'direct';
+  const isAuto = mode === 'auto';
+  const isAnnual = mode === 'annual';
 
   if (annualSection) {
-    annualSection.classList.toggle('hidden', isDirect);
+    annualSection.classList.toggle('hidden', !isAnnual);
   }
   if (annualActions) {
     annualActions.classList.remove('hidden');
   }
   if (addYearBtn) {
-    addYearBtn.classList.toggle('hidden', isDirect);
+    addYearBtn.classList.toggle('hidden', !isAnnual);
   }
   if (removeYearBtn) {
-    removeYearBtn.classList.toggle('hidden', isDirect);
+    removeYearBtn.classList.toggle('hidden', !isAnnual);
   }
   if (submitBtn) {
     submitBtn.classList.remove('hidden');
@@ -615,14 +668,19 @@ function toggleInputModeUI(mode) {
     directSection.classList.toggle('hidden', !isDirect);
     directSection.classList.toggle('grid', isDirect);
   }
+  if (autoSection) {
+    autoSection.classList.toggle('hidden', !isAuto);
+  }
   if (isDirect) {
     const yearsEl = document.getElementById('direct-cagr-years');
     if (yearsEl && !yearsEl.value) yearsEl.value = '5';
   }
   if (help) {
-    help.textContent = isDirect
-      ? 'Mode Direct: isi kurun tahun CAGR + CAGR Net Income, EPS, dan Revenue langsung dalam persen.'
-      : 'Mode Annual: isi minimal 2 tahun data Net Income, EPS, dan Revenue.';
+    help.textContent = isAuto
+      ? 'Mode Otomatis: data annual report diambil otomatis lalu CAGR dihitung otomatis.'
+      : isDirect
+        ? 'Mode Direct: isi kurun tahun CAGR + CAGR Net Income, EPS, dan Revenue langsung dalam persen.'
+        : 'Mode Annual: isi minimal 2 tahun data Net Income, EPS, dan Revenue.';
   }
 
   if (annualChartSection) {
@@ -714,6 +772,13 @@ async function handleSubmit(event) {
       renderCagrTable(ticker, cagrData);
       renderMcdmResult(ticker, methods);
 
+      updateCagrInfoPanel({
+        inputMode: 'direct',
+        cagrYears,
+        periodLabel: `${Math.round(cagrYears)} tahun (direct CAGR input)`,
+        periodSource: 'direct_cagr_input',
+      });
+
       try {
         const key = `cagr-result-${ticker}`;
         const stored = { cagr: cagrData, methods };
@@ -723,6 +788,72 @@ async function handleSubmit(event) {
       }
 
       statusEl.textContent = `Berhasil menghitung CAGR (direct) dan keputusan untuk ${ticker}.`;
+      return;
+    }
+
+    if (inputMode === 'auto') {
+      statusEl.textContent = `Menghitung CAGR otomatis dari annual report untuk ${ticker}...`;
+
+      const body = {
+        items: [
+          {
+            ticker,
+          },
+        ],
+      };
+
+      const res = await fetch('http://127.0.0.1:8000/decision-cagr-auto', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const json = await res.json();
+      const cagrData = json?.cagr?.[ticker];
+      const methods = json?.methods;
+      const annualRaw = json?.annual?.[ticker];
+
+      if (!cagrData) {
+        statusEl.textContent = 'Gagal menghitung CAGR otomatis (data annual report kosong/tidak cukup).';
+        return;
+      }
+
+      if (tableBody) tableBody.innerHTML = '';
+      if (mcdmRoot) mcdmRoot.innerHTML = '';
+
+      renderCagrTable(ticker, cagrData);
+      renderMcdmResult(ticker, methods);
+      if (annualRaw) {
+        const ni = Array.isArray(annualRaw.net_income) ? annualRaw.net_income : [];
+        const rev = Array.isArray(annualRaw.revenue) ? annualRaw.revenue : [];
+        const eps = Array.isArray(annualRaw.eps) ? annualRaw.eps : [];
+        if (ni.length >= 2 && rev.length >= 2 && eps.length >= 2) {
+          renderCagrChart(ni, eps, rev);
+        }
+      }
+
+      updateCagrInfoPanel({
+        inputMode: 'auto',
+        cagrYears: annualRaw?.cagr_years,
+        periodStartYear: annualRaw?.period_start_year,
+        periodEndYear: annualRaw?.period_end_year,
+        periodLabel: annualRaw?.period_label,
+        periodSource: 'auto_annual_report',
+      });
+
+      try {
+        const key = `cagr-result-${ticker}`;
+        const stored = { cagr: cagrData, methods };
+        window.localStorage.setItem(key, JSON.stringify(stored));
+      } catch (e) {
+        // abaikan error storage
+      }
+
+      statusEl.textContent = `Berhasil menghitung CAGR otomatis dan keputusan untuk ${ticker}.`;
       return;
     }
 
@@ -784,6 +915,13 @@ async function handleSubmit(event) {
     renderCagrTable(ticker, cagrData);
     renderMcdmResult(ticker, methods);
 
+    updateCagrInfoPanel({
+      inputMode: 'annual',
+      cagrYears: Math.max(ni.length, rev.length, eps.length),
+      periodLabel: `Manual input (${Math.max(ni.length, rev.length, eps.length)} titik)`,
+      periodSource: 'manual_annual_input',
+    });
+
     // Simpan hasil terakhir ke localStorage agar muncul lagi jika halaman reload
     try {
       const key = `cagr-result-${ticker}`;
@@ -812,6 +950,8 @@ function init() {
   const removeYearBtn = document.getElementById('remove-year-btn');
   const priceIntervalSelect = document.getElementById('price-interval');
   const inputModeEl = document.getElementById('input-mode');
+  const cagrInfoToggle = document.getElementById('cagr-info-toggle');
+  const cagrInfoPanel = document.getElementById('cagr-info-panel');
 
   const t = getQueryTicker();
   if (t && tickerInput) {
@@ -860,6 +1000,12 @@ function init() {
   if (inputModeEl) {
     inputModeEl.addEventListener('change', () => {
       toggleInputModeUI(inputModeEl.value || 'annual');
+    });
+  }
+
+  if (cagrInfoToggle && cagrInfoPanel) {
+    cagrInfoToggle.addEventListener('click', () => {
+      cagrInfoPanel.classList.toggle('hidden');
     });
   }
 
@@ -917,6 +1063,15 @@ function init() {
           toggleInputModeUI(inputMode);
         }
 
+        updateCagrInfoPanel({
+          inputMode,
+          cagrYears: json.cagr_years,
+          periodStartYear: json.period_start_year,
+          periodEndYear: json.period_end_year,
+          periodLabel: json.period_label,
+          periodSource: json.period_source,
+        });
+
         if (inputMode === 'direct') {
           const directNetEl = document.getElementById('direct-cagr-net');
           const directRevEl = document.getElementById('direct-cagr-rev');
@@ -926,6 +1081,13 @@ function init() {
           if (directNetEl) directNetEl.value = json.cagr_net_income ?? '';
           if (directRevEl) directRevEl.value = json.cagr_revenue ?? '';
           if (directEpsEl) directEpsEl.value = json.cagr_eps ?? '';
+          return;
+        }
+
+        if (inputMode === 'auto') {
+          if (ni.length >= 2 && rev.length >= 2 && eps.length >= 2) {
+            renderCagrChart(ni, eps, rev);
+          }
           return;
         }
 

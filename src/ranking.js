@@ -52,6 +52,32 @@ function cagrYearsLabel(years, cagr) {
   return 'Belum cukup data';
 }
 
+function cagrReliabilityInfo(item) {
+  const years = Number(item?.cagr_years);
+  const nearZero = Boolean(item?.cagr_all_zero);
+
+  if (Number.isNaN(years) || years <= 0) {
+    return { label: '⚠️ Insufficient', className: 'text-rose-300', asterisk: true };
+  }
+
+  if (years <= 2) {
+    if (nearZero) {
+      return {
+        label: '⚠️ Low reliability (2 titik, CAGR ~0)',
+        className: 'text-rose-300',
+        asterisk: true,
+      };
+    }
+    return { label: '⚠️ Low reliability (2 titik)', className: 'text-amber-300', asterisk: true };
+  }
+
+  if (years < 5) {
+    return { label: 'Medium reliability', className: 'text-amber-300', asterisk: false };
+  }
+
+  return { label: 'High reliability', className: 'text-emerald-300', asterisk: false };
+}
+
 function renderUnranked(items) {
   const body = document.getElementById('unranked-body');
   if (!body) return;
@@ -103,13 +129,14 @@ function renderRanked(payload) {
   if (ranked.length === 0) {
     body.innerHTML = `
       <tr>
-        <td colspan="12" class="px-2 py-3 text-center text-slate-400">Belum ada ticker yang bisa diranking. Isi CAGR dulu di detailed page.</td>
+        <td colspan="17" class="px-2 py-3 text-center text-slate-400">Belum ada ticker yang bisa diranking. Isi CAGR dulu di detailed page.</td>
       </tr>
     `;
   } else {
     ranked.forEach((it, idx) => {
       const scoreObj = it?.scores?.[method] || {};
       const yearsLabel = cagrYearsLabel(it?.cagr_years, it?.cagr);
+      const reliability = cagrReliabilityInfo(it);
       const signal = methodSignal(method, scoreObj.decision);
       const signalClass =
         signal === 'BUY' || signal === 'Pass'
@@ -118,19 +145,25 @@ function renderRanked(payload) {
             ? 'text-amber-300'
             : 'text-slate-400';
       const category = method === 'FUZZY_AHP_TOPSIS' ? scoreObj.category || '-' : '-';
+      const tickerLabel = `${it.ticker || '-'}${reliability.asterisk ? ' *' : ''}`;
       const tr = document.createElement('tr');
       tr.className = 'cursor-pointer hover:bg-slate-800/40';
       tr.setAttribute('data-ticker', it.ticker || '');
       tr.innerHTML = `
         <td class="px-2 py-2">${idx + 1}</td>
-        <td class="px-2 py-2 font-medium">${it.ticker || '-'}</td>
+        <td class="px-2 py-2 font-medium">${tickerLabel}</td>
         <td class="px-2 py-2">${it.name || '-'}</td>
+        <td class="px-2 py-2 text-slate-300">${it.sector || '-'}</td>
         <td class="px-2 py-2 uppercase text-[10px] text-slate-300">${it.input_mode || '-'}</td>
         <td class="px-2 py-2 text-right">${it.cagr_years || '-'}</td>
-        <td class="px-2 py-2 text-amber-300">${yearsLabel}</td>
+        <td class="px-2 py-2 ${reliability.className}">${reliability.label}<div class="text-[10px] text-slate-500">${yearsLabel}</div></td>
         <td class="px-2 py-2 text-right text-cyan-300">${formatScore(scoreObj.score)}</td>
         <td class="px-2 py-2 ${signalClass}">${signal}</td>
         <td class="px-2 py-2 text-amber-300">${category}</td>
+        <td class="px-2 py-2 text-right">${formatPercent(it?.mos_pct)}</td>
+        <td class="px-2 py-2 text-right">${formatPercent(it?.div_yield_pct)}</td>
+        <td class="px-2 py-2 text-right text-cyan-300">${formatScore(it?.quality_score)}</td>
+        <td class="px-2 py-2 text-emerald-300">${it?.quality_label || '-'}</td>
         <td class="px-2 py-2 text-right">${formatPercent(it?.cagr?.net_income)}</td>
         <td class="px-2 py-2 text-right">${formatPercent(it?.cagr?.eps)}</td>
         <td class="px-2 py-2 text-right">${formatPercent(it?.cagr?.revenue)}</td>
@@ -140,7 +173,7 @@ function renderRanked(payload) {
   }
 
   if (summary) {
-    summary.textContent = `Method: ${methodLabel(method)} • Ranked: ${payload?.ranked_count || 0} • Unranked: ${payload?.unranked_count || 0} • Total Saved: ${payload?.total_saved || 0}`;
+    summary.textContent = `Method: ${methodLabel(method)} • Ranked: ${payload?.ranked_count || 0} • Unranked/Excluded: ${payload?.unranked_count || 0} • Total Saved: ${payload?.total_saved || 0} • Note: tanda * = reliability rendah`;
   }
 }
 

@@ -1,44 +1,236 @@
 {
   "items": {
     "bbri.jk": {
-      "net_income": [],
-      "revenue": [],
-      "eps": [],
-      "cagr_net_income": 12.0,
-      "cagr_revenue": 15.0,
-      "cagr_eps": 132.0,
-      "cagr_years": 5,
-      "input_mode": "direct"
+      "net_income": [
+        51170312000000.0,
+        60099863000000.0,
+        59944649000000.0,
+        56652384000000.0
+      ],
+      "revenue": [
+        153783233000000.0,
+        166453016000000.0,
+        172996429000000.0,
+        186876558000000.0
+      ],
+      "eps": [
+        238.0,
+        338.0,
+        398.0,
+        398.0
+      ],
+      "cagr_net_income": 3.450686042077078,
+      "cagr_revenue": 6.712496416799807,
+      "cagr_eps": 18.69580540328062,
+      "cagr_years": 4,
+      "period_start_year": 2022,
+      "period_end_year": 2024,
+      "period_label": "2022-2024",
+      "period_source": "auto_annual_report",
+      "input_mode": "auto"
     },
     "bbca.jk": {
-      "net_income": [],
-      "revenue": [],
-      "eps": [],
-      "cagr_net_income": 12.0,
-      "cagr_revenue": 15.0,
-      "cagr_eps": 13.0,
-      "cagr_years": 5,
-      "input_mode": "direct"
+      "net_income": [
+        40735722000000.0,
+        48639122000000.0,
+        54836305000000.0,
+        57537287000000.0
+      ],
+      "revenue": [
+        89523508000000.0,
+        100485975000000.0,
+        108796625000000.0,
+        114319648000000.0
+      ],
+      "eps": [
+        330.0,
+        395.0,
+        445.0,
+        467.0
+      ],
+      "cagr_net_income": 12.199603111163015,
+      "cagr_revenue": 8.491220663730958,
+      "cagr_eps": 12.271014467343466,
+      "cagr_years": 4,
+      "period_start_year": 2022,
+      "period_end_year": 2025,
+      "period_label": "2022-2025",
+      "period_source": "auto_annual_report",
+      "input_mode": "auto"
     },
     "mpmx.jk": {
-      "net_income": [],
-      "revenue": [],
-      "eps": [],
-      "cagr_net_income": 5.0,
-      "cagr_revenue": 4.0,
-      "cagr_eps": -2.0,
-      "cagr_years": 5,
-      "input_mode": "direct"
+      "net_income": [
+        411735000000.0,
+        661732000000.0,
+        525621000000.0,
+        582469000000.0
+      ],
+      "revenue": [
+        11913408000000.0,
+        12742854000000.0,
+        13859071000000.0,
+        15776406000000.0
+      ],
+      "eps": [
+        95.0,
+        152.0,
+        120.0,
+        133.0
+      ],
+      "cagr_net_income": 12.25826956435403,
+      "cagr_revenue": 9.8139094310556,
+      "cagr_eps": 11.868894208139679,
+      "cagr_years": 4,
+      "period_start_year": 2021,
+      "period_end_year": 2024,
+      "period_label": "2021-2024",
+      "period_source": "auto_annual_report",
+      "input_mode": "auto"
     },
     "ptba.jk": {
-      "net_income": [],
-      "revenue": [],
-      "eps": [],
-      "cagr_net_income": 8.0,
-      "cagr_revenue": 8.0,
-      "cagr_eps": 8.0,
-      "cagr_years": 5,
-      "input_mode": "direct"
+      "net_income": [
+        7909113000000.0,
+        12567582000000.0,
+        6105856000000.0,
+        5103720000000.0
+      ],
+      "revenue": [
+        29261468000000.0,
+        42648590000000.0,
+        38488867000000.0,
+        42764968000000.0
+      ],
+      "eps": [
+        702.0,
+        1094.0,
+        532.0,
+        444.0
+      ],
+      "cagr_net_income": -13.585553369508773,
+      "cagr_revenue": 13.482966620987579,
+      "cagr_eps": -14.16153304855543,
+      "cagr_years": 4,
+      "period_start_year": 2021,
+      "period_end_year": 2024,
+      "period_label": "2021-2024",
+      "period_source": "auto_annual_report",
+      "input_mode": "auto"
+    },
+    "goto.jk": {
+      "net_income": [
+        -39571161000000.0,
+        -90395629000000.0,
+        -5154924000000.0,
+        -1185654000000.0
+      ],
+      "revenue": [
+        11349167000000.0,
+        14785492000000.0,
+        15894462000000.0,
+        18322117000000.0
+      ],
+      "eps": [
+        -39.0,
+        -85.0,
+        -4.8,
+        -1.12
+      ],
+      "cagr_net_income": 0.0,
+      "cagr_revenue": 17.31059075846513,
+      "cagr_eps": 0.0,
+      "cagr_years": 4,
+      "period_start_year": 2022,
+      "period_end_year": 2025,
+      "period_label": "2022-2025",
+      "period_source": "auto_annual_report",
+      "input_mode": "auto"
+    },
+    "rals.jk": {
+      "net_income": [
+        166161000000.0,
+        351998000000.0,
+        300363000000.0,
+        314055000000.0
+      ],
+      "revenue": [
+        2592682000000.0,
+        2996613000000.0,
+        2744427000000.0,
+        2760507000000.0
+      ],
+      "eps": [
+        25.44,
+        56.17,
+        49.3,
+        52.9
+      ],
+      "cagr_net_income": 23.639964479572374,
+      "cagr_revenue": 2.1127251687557136,
+      "cagr_eps": 27.637862223470332,
+      "cagr_years": 4,
+      "period_start_year": 2021,
+      "period_end_year": 2024,
+      "period_label": "2021-2024",
+      "period_source": "auto_annual_report",
+      "input_mode": "auto"
+    },
+    "bumi.jk": {
+      "net_income": [
+        168018153.0,
+        547164500.0,
+        16448221.0,
+        71023627.0
+      ],
+      "revenue": [
+        1008212975.0,
+        1830079927.0,
+        1679948765.0,
+        1359679473.0
+      ],
+      "eps": [
+        0.00227,
+        0.00314,
+        3e-05,
+        0.00018
+      ],
+      "cagr_net_income": -24.950313885448082,
+      "cagr_revenue": 10.482820552114113,
+      "cagr_eps": -57.03822503116338,
+      "cagr_years": 4,
+      "period_start_year": 2021,
+      "period_end_year": 2024,
+      "period_label": "2021-2024",
+      "period_source": "auto_annual_report",
+      "input_mode": "auto"
+    },
+    "bmri.jk": {
+      "net_income": [
+        41170637000000.0,
+        55060057000000.0,
+        55782742000000.0,
+        56293950000000.0
+      ],
+      "revenue": [
+        115633384000000.0,
+        124193814000000.0,
+        134799086000000.0,
+        140173049000000.0
+      ],
+      "eps": [
+        300.53,
+        441.26,
+        589.93,
+        597.67
+      ],
+      "cagr_net_income": 10.991923758800649,
+      "cagr_revenue": 6.625339802016428,
+      "cagr_eps": 25.754791610108917,
+      "cagr_years": 4,
+      "period_start_year": 2022,
+      "period_end_year": 2024,
+      "period_label": "2022-2024",
+      "period_source": "auto_annual_report",
+      "input_mode": "auto"
     }
   }
 }

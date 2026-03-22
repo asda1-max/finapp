@@ -1,6 +1,8 @@
 import './index.css';
 
 const searchedTickers = new Set();
+const tickerCache = new Map();
+const DASHBOARD_VIEW_MODE_KEY = 'dashboard-view-mode';
 
 function updateTickerJson() {
   // panel JSON sudah dihapus dari UI, fungsi dibiarkan no-op untuk kompatibilitas.
@@ -50,6 +52,7 @@ function isLikelyInvalidTicker(stock, ticker) {
 function buildCardHtml(ticker, s, options = {}) {
   const { cagrReady = false } = options;
   const name = s['Name'] ?? '-';
+  const sector = s['Sector'] ?? '-';
   const price = formatNumber(s['Price']);
   const revenue = formatNumber(s['Revenue Annual (Prev)']);
   const eps = formatNumber(s['EPS NOW']);
@@ -81,6 +84,10 @@ function buildCardHtml(ticker, s, options = {}) {
   const safetyCheck = s['Safety Check'] ?? '-';
   const discountDecision = s['Decision Discount'] ?? '-';
   const dividendDecision = s['Decision Dividend'] ?? '-';
+  const qualityScoreVal = typeof s['Quality Score'] === 'number' ? s['Quality Score'] : null;
+  const qualityScore = qualityScoreVal != null ? qualityScoreVal.toFixed(3) : '-';
+  const qualityLabel = s['Quality Label'] ?? '-';
+  const qualityVerdict = s['Quality Verdict'] ?? '-';
   const hybridScoreValue = typeof s['Hybrid Score'] === 'number' ? s['Hybrid Score'] : null;
   const hybridScore = hybridScoreValue != null ? hybridScoreValue.toFixed(3) : '-';
   const finalHybridScoreValue =
@@ -105,6 +112,7 @@ function buildCardHtml(ticker, s, options = {}) {
         <div class="min-w-0 flex-1 pr-1">
           <h2 class="text-sm font-semibold leading-tight text-slate-50 truncate" title="${name}">${name}</h2>
           <p class="mt-0.5 text-[10px] uppercase text-slate-500">${ticker}</p>
+          <p class="mt-0.5 text-[10px] text-slate-500">Sector: ${sector}</p>
         </div>
         <div class="flex shrink-0 items-center gap-1 whitespace-nowrap">
           <span class="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-emerald-300">MOS ${mos}</span>
@@ -239,6 +247,18 @@ function buildCardHtml(ticker, s, options = {}) {
           <span class="font-medium text-emerald-300">${finalHybridCategory}</span>
         </div>
         <div class="flex justify-between gap-2 text-[10px]">
+          <span class="text-slate-400">Quality Score</span>
+          <span class="font-medium text-cyan-300">${qualityScore}</span>
+        </div>
+        <div class="flex justify-between gap-2 text-[10px]">
+          <span class="text-slate-400">Quality Label</span>
+          <span class="font-medium text-emerald-300">${qualityLabel}</span>
+        </div>
+        <div class="flex justify-between gap-2 text-[10px]">
+          <span class="text-slate-400">Quality Verdict</span>
+          <span class="font-medium text-amber-300">${qualityVerdict}</span>
+        </div>
+        <div class="flex justify-between gap-2 text-[10px]">
           <span class="text-slate-400">Safety Check</span>
           <span class="font-medium text-amber-300">${safetyCheck}</span>
         </div>
@@ -256,6 +276,80 @@ function buildCardHtml(ticker, s, options = {}) {
   `;
 }
 
+function normalizeSectorLabel(value) {
+  const raw = String(value || '').trim();
+  if (!raw || raw === '-') return 'Unknown';
+  return raw;
+}
+
+function getDashboardViewMode() {
+  try {
+    const saved = window.localStorage.getItem(DASHBOARD_VIEW_MODE_KEY);
+    return saved === 'sector' ? 'sector' : 'flat';
+  } catch {
+    return 'flat';
+  }
+}
+
+function setDashboardViewMode(mode) {
+  try {
+    window.localStorage.setItem(DASHBOARD_VIEW_MODE_KEY, mode === 'sector' ? 'sector' : 'flat');
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function renderDashboardCards() {
+  const cardsEl = document.getElementById('stocks-cards');
+  if (!cardsEl) return;
+
+  const mode = getDashboardViewMode();
+  const entries = Array.from(tickerCache.entries());
+  cardsEl.innerHTML = '';
+
+  if (entries.length === 0) {
+    return;
+  }
+
+  if (mode !== 'sector') {
+    for (const [ticker, payload] of entries) {
+      const html = buildCardHtml(ticker, payload.stock, { cagrReady: payload.cagrReady });
+      cardsEl.insertAdjacentHTML('beforeend', html);
+    }
+    return;
+  }
+
+  const groups = new Map();
+  for (const [ticker, payload] of entries) {
+    const sector = normalizeSectorLabel(payload.stock?.Sector);
+    if (!groups.has(sector)) groups.set(sector, []);
+    groups.get(sector).push({ ticker, payload });
+  }
+
+  const sectors = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b));
+  for (const sector of sectors) {
+    const wrapper = document.createElement('section');
+    wrapper.className = 'col-span-full space-y-2';
+
+    const title = document.createElement('h3');
+    title.className = 'text-xs font-semibold uppercase tracking-wide text-sky-300';
+    title.textContent = `-- ${sector} --`;
+    wrapper.appendChild(title);
+
+    const grid = document.createElement('div');
+    grid.className = 'grid gap-3 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
+
+    const rows = groups.get(sector) || [];
+    for (const row of rows) {
+      const html = buildCardHtml(row.ticker, row.payload.stock, { cagrReady: row.payload.cagrReady });
+      grid.insertAdjacentHTML('beforeend', html);
+    }
+
+    wrapper.appendChild(grid);
+    cardsEl.appendChild(wrapper);
+  }
+}
+
 async function loadSavedTickers() {
   const statusEl = document.getElementById('status');
   const cardsEl = document.getElementById('stocks-cards');
@@ -271,18 +365,21 @@ async function loadSavedTickers() {
 
     if (tickers.length === 0) {
       statusEl.textContent = 'Belum ada saham tersimpan.';
+      tickerCache.clear();
       cardsEl.innerHTML = '';
       return;
     }
 
     statusEl.textContent = `Memuat ${tickers.length} saham tersimpan...`;
 
+    tickerCache.clear();
     cardsEl.innerHTML = '';
 
     for (const t of tickers) {
       await loadSingleTicker(t, { skipSave: true });
     }
 
+    renderDashboardCards();
     statusEl.textContent = `Menampilkan ${tickers.length} saham dari data.json.`;
   } catch (error) {
     statusEl.textContent = `Gagal memuat saham tersimpan: ${String(error)}`;
@@ -348,9 +445,8 @@ async function loadSingleTicker(tickerRaw, options = {}) {
       cagrReady = false;
     }
 
-    const cardHtml = buildCardHtml(ticker, s, { cagrReady });
-
-    cardsEl.insertAdjacentHTML('beforeend', cardHtml);
+    tickerCache.set(ticker, { stock: s, cagrReady });
+    renderDashboardCards();
 
     if (!skipSave) {
       searchedTickers.add(ticker);
@@ -445,6 +541,7 @@ function init() {
         }
 
         if (cardsEl) cardsEl.innerHTML = '';
+        tickerCache.clear();
         searchedTickers.clear();
         updateTickerJson();
         if (statusEl) statusEl.textContent = 'Semua data berhasil di-reset.';
@@ -505,6 +602,8 @@ function init() {
             }
 
             if (article) article.remove();
+            tickerCache.delete(t);
+            renderDashboardCards();
             searchedTickers.delete(t);
             updateTickerJson();
 
@@ -522,6 +621,15 @@ function init() {
       if (!t) return;
       const url = `/detailed.html?ticker=${encodeURIComponent(t)}`;
       window.location.href = url;
+    });
+  }
+
+  const viewModeEl = document.getElementById('dashboard-view-mode');
+  if (viewModeEl) {
+    viewModeEl.value = getDashboardViewMode();
+    viewModeEl.addEventListener('change', () => {
+      setDashboardViewMode(viewModeEl.value || 'flat');
+      renderDashboardCards();
     });
   }
 }

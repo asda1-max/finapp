@@ -33,8 +33,8 @@
               Detailed CAGR Analysis
             </h1>
             <p class="mt-1 text-sm text-slate-400">
-              Masukkan 4 tahun terakhir untuk Net Income, Revenue, dan EPS. Sistem akan hitung CAGR
-              dan memberi signal analisis (growth/quality/regret) + final decision dari Hybrid.
+              Gunakan mode Annual (manual), Direct (CAGR langsung), atau Auto (annual report otomatis).
+              Sistem akan hitung CAGR dan memberi signal analisis + final decision dari Hybrid.
             </p>
           </div>
         </header>
@@ -101,6 +101,9 @@
               <div class="flex justify-between"><span>Payout Penalty</span><span id="fund-payout-penalty" class="font-medium">-</span></div>
               <div class="flex justify-between"><span>Execution Decision</span><span id="fund-exec" class="font-medium">-</span></div>
               <div class="flex justify-between"><span>Safety Check</span><span id="fund-safety" class="font-medium">-</span></div>
+              <div class="flex justify-between"><span>Quality Score</span><span id="fund-quality-score" class="font-medium">-</span></div>
+              <div class="flex justify-between"><span>Quality Label</span><span id="fund-quality-label" class="font-medium">-</span></div>
+              <div class="flex justify-between"><span>Quality Verdict</span><span id="fund-quality-verdict" class="font-medium">-</span></div>
             </div>
           </div>
 
@@ -123,27 +126,8 @@
               >
                 <option value="annual">Input Annual Report</option>
                 <option value="direct">Input CAGR Langsung</option>
+                <option value="auto">CAGR Otomatis (Annual Report)</option>
               </select>
-            </div>
-
-            <div id="annual-input-section" class="grid gap-4 sm:grid-cols-3">
-              <div class="space-y-2 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                <h2 class="text-xs font-semibold text-slate-200">Net Income (Rp)</h2>
-                <p class="text-[10px] text-slate-500">Dari tahun terlama ke terbaru. Minimal 2 tahun.</p>
-                <div id="ni-container" class="space-y-1.5"></div>
-              </div>
-
-              <div class="space-y-2 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                <h2 class="text-xs font-semibold text-slate-200">EPS (per saham)</h2>
-                <p class="text-[10px] text-slate-500">Dari tahun terlama ke terbaru. Minimal 2 tahun.</p>
-                <div id="eps-container" class="space-y-1.5"></div>
-              </div>
-
-              <div class="space-y-2 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                <h2 class="text-xs font-semibold text-slate-200">Revenue (Rp)</h2>
-                <p class="text-[10px] text-slate-500">Dari tahun terlama ke terbaru. Minimal 2 tahun.</p>
-                <div id="rev-container" class="space-y-1.5"></div>
-              </div>
             </div>
 
             <div id="direct-cagr-section" class="hidden gap-3 sm:grid-cols-4">
@@ -190,8 +174,33 @@
               </div>
             </div>
 
+            <div id="annual-input-section" class="grid gap-4 sm:grid-cols-3">
+              <div class="space-y-2 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                <h2 class="text-xs font-semibold text-slate-200">Net Income (Rp)</h2>
+                <p class="text-[10px] text-slate-500">Dari tahun terlama ke terbaru. Minimal 2 tahun.</p>
+                <div id="ni-container" class="space-y-1.5"></div>
+              </div>
+
+              <div class="space-y-2 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                <h2 class="text-xs font-semibold text-slate-200">EPS (per saham)</h2>
+                <p class="text-[10px] text-slate-500">Dari tahun terlama ke terbaru. Minimal 2 tahun.</p>
+                <div id="eps-container" class="space-y-1.5"></div>
+              </div>
+
+              <div class="space-y-2 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                <h2 class="text-xs font-semibold text-slate-200">Revenue (Rp)</h2>
+                <p class="text-[10px] text-slate-500">Dari tahun terlama ke terbaru. Minimal 2 tahun.</p>
+                <div id="rev-container" class="space-y-1.5"></div>
+              </div>
+            </div>
+
+            <div id="auto-cagr-section" class="hidden rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-[11px] text-slate-300">
+              Mode otomatis akan mengambil data annual report dari yfinance (Net Income, Revenue, EPS),
+              menghitung CAGR otomatis, lalu menampilkan grafik annual growth.
+            </div>
+
             <p id="input-mode-help" class="text-[10px] text-slate-500">
-              Mode Annual: isi minimal 2 tahun data. Mode Direct: isi CAGR langsung dalam persen.
+              Mode Annual: isi manual minimal 2 tahun data. Mode Direct: isi CAGR langsung. Mode Otomatis: hitung dari annual report.
             </p>
 
             <div id="annual-actions" class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -226,7 +235,23 @@
 
           <div id="cagr-result" class="hidden space-y-3">
             <div>
-              <h2 class="text-xs font-semibold text-slate-200">Hasil CAGR</h2>
+              <div class="flex items-center justify-between gap-2">
+                <h2 class="text-xs font-semibold text-slate-200">Hasil CAGR</h2>
+                <button
+                  type="button"
+                  id="cagr-info-toggle"
+                  class="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-[11px] font-semibold text-slate-200 hover:border-sky-500 hover:text-sky-300"
+                  title="Informasi periode data CAGR"
+                  aria-label="Informasi periode data CAGR"
+                >
+                  i
+                </button>
+              </div>
+              <div id="cagr-info-panel" class="mt-2 hidden rounded-lg border border-slate-800 bg-slate-950/70 p-2 text-[10px] text-slate-300">
+                <div class="flex justify-between gap-2"><span class="text-slate-500">Mode</span><span id="cagr-info-mode">-</span></div>
+                <div class="mt-1 flex justify-between gap-2"><span class="text-slate-500">Periode CAGR</span><span id="cagr-info-period">-</span></div>
+                <div class="mt-1 flex justify-between gap-2"><span class="text-slate-500">Sumber</span><span id="cagr-info-source">-</span></div>
+              </div>
               <table class="mt-1 w-full border-separate border-spacing-y-1 text-[11px]">
                 <thead class="text-slate-400">
                   <tr>

@@ -33,6 +33,184 @@ def _normalize_percent_value(raw_value):
     return val
 
 
+def _normalize_debt_to_equity_value(raw_value):
+    """Normalisasi Debt to Equity agar konsisten dalam persen.
+
+    - Jika input kecil (mis. 1.2), anggap rasio dan ubah jadi 120.
+    - Jika sudah besar (mis. 180), biarkan apa adanya.
+    """
+
+    if raw_value is None:
+        return None
+    try:
+        val = float(raw_value)
+    except (TypeError, ValueError):
+        return None
+
+    if not np.isfinite(val):
+        return None
+
+    if val != 0 and abs(val) <= 5:
+        return val * 100.0
+    return val
+
+
+def _compute_quality_profile(*, info: dict, roe_pct: float, market_cap: float) -> dict:
+    """Hitung quality score saham (0..1) dari faktor fundamental utama."""
+
+    sector = str(info.get("sector") or "").strip().lower()
+    industry = str(info.get("industry") or "").strip().lower()
+    is_bank = ("bank" in sector) or ("bank" in industry) or ("banks" in industry)
+
+    npm_pct = _normalize_percent_value(info.get("profitMargins"))
+    de_pct = _normalize_debt_to_equity_value(info.get("debtToEquity"))
+
+    current_ratio_raw = info.get("currentRatio")
+    try:
+        current_ratio = float(current_ratio_raw) if current_ratio_raw is not None else None
+    except (TypeError, ValueError):
+        current_ratio = None
+    if current_ratio is not None and not np.isfinite(current_ratio):
+        current_ratio = None
+
+    # ROE score
+    if roe_pct >= 20:
+        roe_score = 1.0
+    elif roe_pct >= 15:
+        roe_score = 0.8
+    elif roe_pct >= 10:
+        roe_score = 0.6
+    elif roe_pct >= 5:
+        roe_score = 0.4
+    else:
+        roe_score = 0.2
+
+    # Net Profit Margin score
+    if npm_pct is None:
+        npm_score = 0.5
+    elif npm_pct >= 25:
+        npm_score = 1.0
+    elif npm_pct >= 15:
+        npm_score = 0.8
+    elif npm_pct >= 8:
+        npm_score = 0.6
+    elif npm_pct >= 3:
+        npm_score = 0.45
+    elif npm_pct >= 0:
+        npm_score = 0.35
+    else:
+        npm_score = 0.1
+
+    # Debt to Equity score
+    if de_pct is None:
+        de_score = 0.6 if is_bank else 0.5
+    elif is_bank:
+        if de_pct <= 800:
+            de_score = 0.7
+        elif de_pct <= 1200:
+            de_score = 0.55
+        else:
+            de_score = 0.35
+    else:
+        if de_pct <= 50:
+            de_score = 1.0
+        elif de_pct <= 100:
+            de_score = 0.8
+        elif de_pct <= 150:
+            de_score = 0.6
+        elif de_pct <= 250:
+            de_score = 0.4
+        else:
+            de_score = 0.2
+
+    # Current ratio score
+    if current_ratio is None:
+        current_score = 0.6 if is_bank else 0.5
+    elif current_ratio >= 2.0:
+        current_score = 1.0
+    elif current_ratio >= 1.5:
+        current_score = 0.8
+    elif current_ratio >= 1.2:
+        current_score = 0.6
+    elif current_ratio >= 1.0:
+        current_score = 0.45
+    else:
+        current_score = 0.2
+
+    # Market cap tier score (proxy quality/stability)
+    mc = float(market_cap or 0.0)
+    if mc >= 100_000_000_000_000:
+        mc_score = 1.0
+    elif mc >= 50_000_000_000_000:
+        mc_score = 0.85
+    elif mc >= 10_000_000_000_000:
+        mc_score = 0.65
+    elif mc >= 2_000_000_000_000:
+        mc_score = 0.45
+    else:
+        mc_score = 0.25
+
+    # Bobot kualitas
+    quality_score = (
+        (0.25 * roe_score)
+        + (0.25 * npm_score)
+        + (0.20 * de_score)
+        + (0.15 * current_score)
+        + (0.15 * mc_score)
+    )
+
+    if quality_score >= 0.8:
+        quality_label = "Premium"
+    elif quality_score >= 0.65:
+        quality_label = "Solid"
+    elif quality_score >= 0.5:
+        quality_label = "Standard"
+    else:
+        quality_label = "Weak"
+
+    return {
+        "score": float(max(0.0, min(quality_score, 1.0))),
+        "label": quality_label,
+        "npm_pct": npm_pct,
+        "debt_to_equity_pct": de_pct,
+        "current_ratio": current_ratio,
+        "is_bank": is_bank,
+    }
+
+
+def _apply_quality_verdict(df: pd.DataFrame) -> pd.DataFrame:
+    """Tambahkan verdict kualitas yang bisa dipakai sebagai sinyal tambahan."""
+
+    if df is None or len(df) == 0:
+        return df
+
+    verdicts = []
+    for _, row in df.iterrows():
+        q = pd.to_numeric(row.get("Quality Score"), errors="coerce")
+        q = float(q) if not pd.isna(q) else 0.0
+        mos = float(pd.to_numeric(row.get("MOS (%)"), errors="coerce") or 0.0)
+        final_dec = str(row.get("Final Decision Buy") or row.get("Decision Buy") or "NO BUY").strip().upper()
+
+        if q >= 0.8:
+            if mos < 0:
+                verdict = "Quality Premium with Expensive Prices"
+            elif final_dec == "BUY":
+                verdict = "Quality Premium"
+            else:
+                verdict = "Quality Premium (Watchlist)"
+        elif q >= 0.65:
+            verdict = "Quality Solid"
+        elif q >= 0.5:
+            verdict = "Quality Standard"
+        else:
+            verdict = "Quality Weak"
+
+        verdicts.append(verdict)
+
+    df["Quality Verdict"] = verdicts
+    return df
+
+
 def _load_cagr_items() -> dict:
     if not CAGR_JSON_PATH.exists():
         return {}
@@ -133,6 +311,41 @@ def _estimate_dividend_growth_from_history(stock, years: int = 5):
     if not np.isfinite(cagr):
         return None
     return float(cagr * 100.0)
+
+
+def _estimate_pbv_mean_3y_from_history(stock, bvp_per_share: float):
+    """Estimasi rata-rata PBV 3 tahun dari histori harga.
+
+    Historis BVP tidak selalu tersedia, sehingga BVP saat ini dipakai
+    sebagai proxy untuk membentuk seri PBV historis.
+    """
+
+    try:
+        bvp = float(bvp_per_share)
+    except (TypeError, ValueError):
+        return None
+
+    if not np.isfinite(bvp) or bvp <= 0:
+        return None
+
+    try:
+        hist_3y = stock.history(period="3y", interval="1mo")
+    except Exception:
+        return None
+
+    if hist_3y is None or hist_3y.empty or "Close" not in hist_3y.columns:
+        return None
+
+    closes = pd.to_numeric(hist_3y["Close"], errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
+    if closes.empty:
+        return None
+
+    pbv_series = closes / bvp
+    pbv_series = pbv_series.replace([np.inf, -np.inf], np.nan).dropna()
+    if pbv_series.empty:
+        return None
+
+    return float(pbv_series.mean())
 
 
 def _decision_engine(current_price, mos, roe, pbv, div_yield, down_from_high):
@@ -548,6 +761,8 @@ def get_stock_data(ticker_list):
         payout_ratio = _normalize_percent_value(payout_ratio_raw)
         div_growth = _normalize_percent_value(div_growth_raw)
 
+        quality = _compute_quality_profile(info=info, roe_pct=roe, market_cap=float(market_cap or 0.0))
+
         # Fallback: beberapa ticker tidak mengisi `dividendGrowth` secara konsisten
         # di `info`, jadi hitung estimasi growth dari histori dividen 5 tahun.
         if div_growth is None or not np.isfinite(div_growth) or div_growth <= 0:
@@ -557,13 +772,49 @@ def get_stock_data(ticker_list):
 
         
         # 3. Perhitungan Kustom (Kalkulasi Otomatis)
-        # Rumus Graham Number: sqrt(22.5 * EPS * BVP)
+        # MOS Graham (sudah ada)
         if eps > 0 and bvp_per_s > 0:
             graham = np.sqrt(22.5 * eps * bvp_per_s)
-            mos = ((graham - current_price) / graham) * 100
+            mos_graham = ((graham - current_price) / graham) * 100
         else:
             graham = 0
-            mos = 0
+            mos_graham = 0.0
+
+        # MOS PBV historis (3Y):
+        # jika PBV sekarang < rerata historis, berarti lebih murah (MOS PBV positif).
+        pbv_now = 0.0
+        try:
+            pbv_now = float(pbv)
+        except (TypeError, ValueError):
+            pbv_now = 0.0
+        if not np.isfinite(pbv_now) or pbv_now <= 0:
+            pbv_now = 0.0
+
+        if pbv_now <= 0 and bvp_per_s and float(bvp_per_s) > 0:
+            pbv_now = float(current_price) / float(bvp_per_s)
+
+        pbv_mean_3y = _estimate_pbv_mean_3y_from_history(stock, bvp_per_s)
+        if pbv_mean_3y is not None and np.isfinite(pbv_mean_3y) and pbv_mean_3y > 0 and pbv_now > 0:
+            mos_pbv = ((pbv_mean_3y - pbv_now) / pbv_mean_3y) * 100
+        else:
+            mos_pbv = mos_graham
+
+        # Hybrid MOS dengan bobot sektor:
+        # - Perbankan: PBV lebih dominan.
+        # - Non-perbankan: Graham lebih dominan.
+        is_bank = bool(quality.get('is_bank'))
+        has_graham = np.isfinite(mos_graham) and graham > 0
+        has_pbv = np.isfinite(mos_pbv)
+
+        if has_graham and has_pbv:
+            if is_bank:
+                mos = (0.2 * mos_graham) + (0.8 * mos_pbv)
+            else:
+                mos = (0.8 * mos_graham) + (0.2 * mos_pbv)
+        elif has_pbv:
+            mos = float(mos_pbv)
+        else:
+            mos = float(mos_graham)
             
         # Down from High (berapa % di bawah high)
         down_from_high = ((high_52 - current_price) / high_52) * 100 if high_52 > 0 else 0
@@ -619,6 +870,8 @@ def get_stock_data(ticker_list):
         data = {
             'Ticker': symbol,
             'Name': info.get('shortName', symbol),
+            'Sector': info.get('sector') or '-',
+            'Industry': info.get('industry') or '-',
             'Price': current_price,
             'Revenue Annual (Prev)': info.get('totalRevenue') or 0,
             'EPS NOW': eps,
@@ -638,6 +891,14 @@ def get_stock_data(ticker_list):
             'MOS (%)': round(mos, 2),
             'Free Cashflow': fcf,
             'PBV': pbv,
+            'PBV Mean 3Y': round(pbv_mean_3y, 3) if pbv_mean_3y is not None and np.isfinite(pbv_mean_3y) else None,
+            'MOS Graham (%)': round(float(mos_graham), 2) if np.isfinite(mos_graham) else None,
+            'MOS PBV (%)': round(float(mos_pbv), 2) if np.isfinite(mos_pbv) else None,
+            'Net Profit Margin (%)': round(quality.get('npm_pct'), 2) if quality.get('npm_pct') is not None else None,
+            'Debt To Equity (%)': round(quality.get('debt_to_equity_pct'), 2) if quality.get('debt_to_equity_pct') is not None else None,
+            'Current Ratio': round(quality.get('current_ratio'), 2) if quality.get('current_ratio') is not None else None,
+            'Quality Score': round(float(quality.get('score') or 0.0), 3),
+            'Quality Label': quality.get('label') or '-',
             'Dividend Yield (%)': div_yield,
             'Dividend Growth (%)': round(div_growth, 2) if div_growth is not None else None,
             'Payout Ratio (%)': round(payout_ratio, 2) if payout_ratio is not None else None,
@@ -653,6 +914,7 @@ def get_stock_data(ticker_list):
     # Terapkan Hybrid FUZZY AHP-TOPSIS untuk keputusan BUY/NO BUY
     df = _apply_fuzzy_ahp_topsis_buy_decision(df)
     df = _apply_payout_ratio_safety_check(df)
+    df = _apply_quality_verdict(df)
 
     return df
 

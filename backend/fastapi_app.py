@@ -58,6 +58,14 @@ class CagrDirectRequest(BaseModel):
     items: List[CagrDirectItem]
 
 
+class CagrAutoItem(BaseModel):
+    ticker: str
+
+
+class CagrAutoRequest(BaseModel):
+    items: List[CagrAutoItem]
+
+
 class ResetPayload(BaseModel):
     confirmation: str
 
@@ -178,6 +186,183 @@ def _has_direct_cagr(item: dict) -> bool:
     r = _to_float_or_none(item.get("cagr_revenue"))
     e = _to_float_or_none(item.get("cagr_eps"))
     return n is not None and r is not None and e is not None
+
+
+def _normalize_numeric_series(series_like) -> List[float]:
+    try:
+        values = [float(x) for x in list(series_like) if x is not None and np.isfinite(float(x))]
+    except Exception:
+        return []
+    return values
+
+
+def _extract_year(value) -> int | None:
+    if value is None:
+        return None
+    try:
+        if hasattr(value, "year"):
+            y = int(value.year)
+            return y if 1900 <= y <= 2200 else None
+        s = str(value)
+        if len(s) >= 4 and s[:4].isdigit():
+            y = int(s[:4])
+            return y if 1900 <= y <= 2200 else None
+    except Exception:
+        return None
+    return None
+
+
+def _extract_financial_row_series(financials, candidates: List[str]) -> tuple[List[float], List[int]]:
+    if financials is None:
+        return [], []
+    try:
+        idx = list(financials.index)
+    except Exception:
+        return [], []
+
+    for name in candidates:
+        if name not in idx:
+            continue
+        try:
+            row = financials.loc[name]
+            row = row.sort_index()
+            vals: List[float] = []
+            years: List[int] = []
+            for col, raw_val in row.items():
+                v = _to_float_or_none(raw_val)
+                if v is None or not np.isfinite(v):
+                    continue
+                y = _extract_year(col)
+                vals.append(float(v))
+                if y is not None:
+                    years.append(int(y))
+            if len(vals) >= 2:
+                uniq_years = sorted({int(y) for y in years})
+                return vals, uniq_years
+        except Exception:
+            continue
+    return [], []
+
+
+def _extract_eps_series(stock, financials) -> tuple[List[float], List[int]]:
+    # Prioritas 1: EPS tahunan dari income statement bila tersedia.
+    eps_from_fin, eps_years = _extract_financial_row_series(financials, ["Diluted EPS", "Basic EPS", "Normalized EPS"])
+    if len(eps_from_fin) >= 2:
+        return eps_from_fin, eps_years
+
+    # Prioritas 2: ringkas earnings history kuartalan menjadi rerata EPS per tahun.
+    try:
+        eh = stock.earnings_history
+    except Exception:
+        eh = None
+
+    if eh is None:
+        return [], []
+
+    try:
+        if eh.empty or "epsActual" not in eh.columns:
+            return [], []
+    except Exception:
+        return [], []
+
+    try:
+        df = eh.copy()
+        if "asOfDate" in df.columns:
+            years = np.array([d.year if not np.isnat(d) else None for d in np.array(df["asOfDate"], dtype="datetime64[ns]")])
+        else:
+            years = np.array([d.year for d in df.index])
+
+        eps_vals = np.array(df["epsActual"], dtype=float)
+        yearly = {}
+        for y, v in zip(years, eps_vals):
+            if y is None or not np.isfinite(v):
+                continue
+            yearly.setdefault(int(y), []).append(float(v))
+
+        if len(yearly) < 2:
+            return [], []
+
+        out = []
+        years_out = []
+        for y in sorted(yearly.keys()):
+            vals = yearly[y]
+            if not vals:
+                continue
+            out.append(float(sum(vals) / len(vals)))
+            years_out.append(int(y))
+        return (out, years_out) if len(out) >= 2 else ([], [])
+    except Exception:
+        return [], []
+
+
+def _extract_auto_cagr_payload(ticker: str) -> dict:
+    symbol = (ticker or "").strip()
+    if not symbol:
+        return {
+            "ticker": "",
+            "net_income": [],
+            "revenue": [],
+            "eps": [],
+            "cagr_net_income": 0.0,
+            "cagr_revenue": 0.0,
+            "cagr_eps": 0.0,
+            "cagr_years": 0,
+            "period_start_year": None,
+            "period_end_year": None,
+            "period_label": None,
+            "period_source": "auto_annual_report",
+            "input_mode": "auto",
+        }
+
+    stock = yf.Ticker(symbol)
+    try:
+        financials = stock.financials
+    except Exception:
+        financials = None
+
+    ni, ni_years = _extract_financial_row_series(financials, ["Net Income", "NetIncome", "Net Income Common Stockholders"])
+    rev, rev_years = _extract_financial_row_series(financials, ["Total Revenue", "TotalRevenue", "Operating Revenue"])
+    eps, eps_years = _extract_eps_series(stock, financials)
+
+    cagr_net = compute_cagr(ni)
+    cagr_rev = compute_cagr(rev)
+    cagr_eps = compute_cagr(eps)
+    years_span = int(max(len(ni), len(rev), len(eps), 0))
+
+    common_years = sorted(set(ni_years) & set(rev_years) & set(eps_years))
+    if len(common_years) >= 2:
+        period_start_year = int(common_years[0])
+        period_end_year = int(common_years[-1])
+    else:
+        merged_years = sorted(set(ni_years) | set(rev_years) | set(eps_years))
+        if len(merged_years) >= 2:
+            period_start_year = int(merged_years[0])
+            period_end_year = int(merged_years[-1])
+        else:
+            period_start_year = None
+            period_end_year = None
+
+    period_label = (
+        f"{period_start_year}-{period_end_year}"
+        if period_start_year is not None and period_end_year is not None
+        else None
+    )
+
+    return {
+        "ticker": symbol,
+        "net_income": ni,
+        "revenue": rev,
+        "eps": eps,
+        "cagr_net_income": cagr_net,
+        "cagr_revenue": cagr_rev,
+        "cagr_eps": cagr_eps,
+        "cagr_years": years_span,
+        "period_start_year": period_start_year,
+        "period_end_year": period_end_year,
+        "period_label": period_label,
+        "period_source": "auto_annual_report",
+        "input_mode": "auto",
+    }
 
 
 def _load_threshold_data() -> dict:
@@ -645,6 +830,10 @@ async def decision_cagr(request: CagrRequest) -> dict:
             "cagr_revenue": cagr_rev,
             "cagr_eps": cagr_eps,
             "cagr_years": years_span,
+            "period_start_year": None,
+            "period_end_year": None,
+            "period_label": f"Manual input ({years_span} points)",
+            "period_source": "manual_annual_input",
             "input_mode": "annual",
         }
 
@@ -656,75 +845,173 @@ async def decision_cagr(request: CagrRequest) -> dict:
 
 @app.post("/decision-cagr-direct")
 async def decision_cagr_direct(request: CagrDirectRequest) -> dict:
-        """Hitung keputusan langsung dari nilai CAGR (tanpa input annual report).
+    """Hitung keputusan langsung dari nilai CAGR (tanpa input annual report).
 
-        Body contoh:
-        {
-            "items": [
-                {
-                    "ticker": "BBCA.JK",
-                    "cagr_net_income": 12.5,
-                    "cagr_revenue": 9.1,
-                    "cagr_eps": 14.0
-                }
-            ]
+    Body contoh:
+    {
+        "items": [
+            {
+                "ticker": "BBCA.JK",
+                "cagr_net_income": 12.5,
+                "cagr_revenue": 9.1,
+                "cagr_eps": 14.0
+            }
+        ]
+    }
+    """
+
+    results: List[CagrResult] = []
+    existing = _load_cagr_data()
+
+    tickers = [item.ticker.strip() or "-" for item in request.items]
+    fundamentals_df = get_stock_data(tickers) if tickers else None
+    fundamentals = fundamentals_df.to_dict(orient="records") if fundamentals_df is not None else []
+
+    for idx, item in enumerate(request.items):
+        t = item.ticker.strip() or "-"
+        cagr_net = float(item.cagr_net_income)
+        cagr_rev = float(item.cagr_revenue)
+        cagr_eps = float(item.cagr_eps)
+        cagr_years = int(item.cagr_years) if int(item.cagr_years) > 0 else 1
+
+        fund = fundamentals[idx] if idx < len(fundamentals) else {}
+
+        roe = float(fund.get("ROE (%)") or 0.0)
+        mos = float(fund.get("MOS (%)") or 0.0)
+        pbv = float(fund.get("PBV") or 0.0)
+        div_yield = float(fund.get("Dividend Yield (%)") or 0.0)
+        per = float(fund.get("PER NOW") or 0.0)
+        down_from_high = float(fund.get("Down From High 52 (%)") or 0.0)
+
+        results.append(
+            CagrResult(
+                ticker=t,
+                cagr_net_income=cagr_net,
+                cagr_revenue=cagr_rev,
+                cagr_eps=cagr_eps,
+                roe=roe,
+                mos=mos,
+                pbv=pbv,
+                div_yield=div_yield,
+                per=per,
+                down_from_high=down_from_high,
+            )
+        )
+
+        prev = existing.get(t) if isinstance(existing.get(t), dict) else {}
+        existing[t] = {
+            # pertahankan annual raw lama jika ada
+            "net_income": (prev or {}).get("net_income") or [],
+            "revenue": (prev or {}).get("revenue") or [],
+            "eps": (prev or {}).get("eps") or [],
+            "cagr_net_income": cagr_net,
+            "cagr_revenue": cagr_rev,
+            "cagr_eps": cagr_eps,
+            "cagr_years": cagr_years,
+            "period_start_year": None,
+            "period_end_year": None,
+            "period_label": f"Direct CAGR input ({cagr_years} years)",
+            "period_source": "direct_cagr_input",
+            "input_mode": "direct",
         }
-        """
 
-        results: List[CagrResult] = []
-        existing = _load_cagr_data()
+    _save_cagr_data(existing)
 
-        tickers = [item.ticker.strip() or "-" for item in request.items]
-        fundamentals_df = get_stock_data(tickers) if tickers else None
-        fundamentals = fundamentals_df.to_dict(orient="records") if fundamentals_df is not None else []
+    return evaluate_cagr_methods(results, use_cagr=True)
 
-        for idx, item in enumerate(request.items):
-                t = item.ticker.strip() or "-"
-                cagr_net = float(item.cagr_net_income)
-                cagr_rev = float(item.cagr_revenue)
-                cagr_eps = float(item.cagr_eps)
-                cagr_years = int(item.cagr_years) if int(item.cagr_years) > 0 else 1
 
-                fund = fundamentals[idx] if idx < len(fundamentals) else {}
+@app.post("/decision-cagr-auto")
+async def decision_cagr_auto(request: CagrAutoRequest) -> dict:
+    """Hitung CAGR otomatis dari annual report (yfinance financials/earnings_history)."""
 
-                roe = float(fund.get("ROE (%)") or 0.0)
-                mos = float(fund.get("MOS (%)") or 0.0)
-                pbv = float(fund.get("PBV") or 0.0)
-                div_yield = float(fund.get("Dividend Yield (%)") or 0.0)
-                per = float(fund.get("PER NOW") or 0.0)
-                down_from_high = float(fund.get("Down From High 52 (%)") or 0.0)
+    results: List[CagrResult] = []
+    existing = _load_cagr_data()
 
-                results.append(
-                        CagrResult(
-                                ticker=t,
-                                cagr_net_income=cagr_net,
-                                cagr_revenue=cagr_rev,
-                                cagr_eps=cagr_eps,
-                                roe=roe,
-                                mos=mos,
-                                pbv=pbv,
-                                div_yield=div_yield,
-                                per=per,
-                                down_from_high=down_from_high,
-                        )
-                )
+    tickers = [item.ticker.strip() or "-" for item in request.items]
+    fundamentals_df = get_stock_data(tickers) if tickers else None
+    fundamentals = fundamentals_df.to_dict(orient="records") if fundamentals_df is not None else []
 
-                prev = existing.get(t) if isinstance(existing.get(t), dict) else {}
-                existing[t] = {
-                        # pertahankan annual raw lama jika ada
-                        "net_income": (prev or {}).get("net_income") or [],
-                        "revenue": (prev or {}).get("revenue") or [],
-                        "eps": (prev or {}).get("eps") or [],
-                        "cagr_net_income": cagr_net,
-                        "cagr_revenue": cagr_rev,
-                        "cagr_eps": cagr_eps,
-                        "cagr_years": cagr_years,
-                        "input_mode": "direct",
+    auto_payload = {}
+    missing = []
+
+    for idx, item in enumerate(request.items):
+        t = item.ticker.strip() or "-"
+        auto_data = _extract_auto_cagr_payload(t)
+
+        ni = auto_data.get("net_income") or []
+        rev = auto_data.get("revenue") or []
+        eps = auto_data.get("eps") or []
+        if len(ni) < 2 or len(rev) < 2 or len(eps) < 2:
+            missing.append(
+                {
+                    "ticker": t,
+                    "reason": "Data annual report belum cukup (butuh minimal 2 titik untuk Net Income, Revenue, EPS)",
                 }
+            )
+            continue
 
-        _save_cagr_data(existing)
+        cagr_net = float(auto_data.get("cagr_net_income") or 0.0)
+        cagr_rev = float(auto_data.get("cagr_revenue") or 0.0)
+        cagr_eps = float(auto_data.get("cagr_eps") or 0.0)
+        cagr_years = int(auto_data.get("cagr_years") or 0)
 
-        return evaluate_cagr_methods(results, use_cagr=True)
+        fund = fundamentals[idx] if idx < len(fundamentals) else {}
+
+        roe = float(fund.get("ROE (%)") or 0.0)
+        mos = float(fund.get("MOS (%)") or 0.0)
+        pbv = float(fund.get("PBV") or 0.0)
+        div_yield = float(fund.get("Dividend Yield (%)") or 0.0)
+        per = float(fund.get("PER NOW") or 0.0)
+        down_from_high = float(fund.get("Down From High 52 (%)") or 0.0)
+
+        results.append(
+            CagrResult(
+                ticker=t,
+                cagr_net_income=cagr_net,
+                cagr_revenue=cagr_rev,
+                cagr_eps=cagr_eps,
+                roe=roe,
+                mos=mos,
+                pbv=pbv,
+                div_yield=div_yield,
+                per=per,
+                down_from_high=down_from_high,
+            )
+        )
+
+        existing[t] = {
+            "net_income": list(ni),
+            "revenue": list(rev),
+            "eps": list(eps),
+            "cagr_net_income": cagr_net,
+            "cagr_revenue": cagr_rev,
+            "cagr_eps": cagr_eps,
+            "cagr_years": cagr_years,
+            "period_start_year": auto_data.get("period_start_year"),
+            "period_end_year": auto_data.get("period_end_year"),
+            "period_label": auto_data.get("period_label") or f"Auto annual report ({cagr_years} points)",
+            "period_source": auto_data.get("period_source") or "auto_annual_report",
+            "input_mode": "auto",
+        }
+        auto_payload[t] = {
+            "net_income": list(ni),
+            "revenue": list(rev),
+            "eps": list(eps),
+            "cagr_years": cagr_years,
+            "period_start_year": auto_data.get("period_start_year"),
+            "period_end_year": auto_data.get("period_end_year"),
+            "period_label": auto_data.get("period_label"),
+        }
+
+    _save_cagr_data(existing)
+
+    if not results:
+        raise HTTPException(status_code=400, detail={"message": "Auto CAGR gagal: data annual report belum cukup", "missing": missing})
+
+    out = evaluate_cagr_methods(results, use_cagr=True)
+    out["annual"] = auto_payload
+    out["missing"] = missing
+    return out
 
 
 @app.get("/cagr-raw/{ticker}")
@@ -740,7 +1027,7 @@ async def get_cagr_raw(ticker: str) -> dict:
     input_mode = data.get("input_mode") or "annual"
 
     years_val = data.get("cagr_years")
-    if years_val is None and input_mode == "annual":
+    if years_val is None and input_mode in ("annual", "auto"):
         years_val = max(
             len(data.get("net_income") or []),
             len(data.get("revenue") or []),
@@ -758,6 +1045,10 @@ async def get_cagr_raw(ticker: str) -> dict:
         "cagr_revenue": data.get("cagr_revenue"),
         "cagr_eps": data.get("cagr_eps"),
         "cagr_years": years_val,
+        "period_start_year": data.get("period_start_year"),
+        "period_end_year": data.get("period_end_year"),
+        "period_label": data.get("period_label"),
+        "period_source": data.get("period_source"),
         "input_mode": input_mode,
     }
 
@@ -894,11 +1185,12 @@ async def get_performance_overview(
 async def get_ranking_data() -> dict:
     """Kembalikan data ranking saham berdasarkan metode MCDM yang dipilih di frontend.
 
-    - ranked: hanya ticker yang sudah punya input CAGR (annual/direct)
+    - ranked: hanya ticker yang sudah punya input CAGR (annual/direct/auto)
     - unranked: ticker tersimpan yang belum punya data CAGR lengkap
     """
 
     saved_tickers = _load_saved_tickers()
+    exclude_threshold = 0.15
     cagr_items = _load_cagr_data()
 
     if not saved_tickers:
@@ -934,7 +1226,25 @@ async def get_ranking_data() -> dict:
             unranked.append({"ticker": ticker, "name": name, "reason": "CAGR belum diinput"})
             continue
 
-        if has_direct:
+        stored_mode = str(raw.get("input_mode") or "").strip().lower()
+        if stored_mode == "direct" and has_direct:
+            cagr_net = float(raw.get("cagr_net_income"))
+            cagr_rev = float(raw.get("cagr_revenue"))
+            cagr_eps = float(raw.get("cagr_eps"))
+            input_mode = "direct"
+            cagr_years = int(raw.get("cagr_years") or 0)
+        elif stored_mode in ("annual", "auto") and has_annual:
+            cagr_net = compute_cagr(raw.get("net_income") or [])
+            cagr_rev = compute_cagr(raw.get("revenue") or [])
+            cagr_eps = compute_cagr(raw.get("eps") or [])
+            input_mode = stored_mode
+            cagr_years = max(
+                len(raw.get("net_income") or []),
+                len(raw.get("revenue") or []),
+                len(raw.get("eps") or []),
+            )
+            cagr_years = int(max(cagr_years, 0))
+        elif has_direct:
             cagr_net = float(raw.get("cagr_net_income"))
             cagr_rev = float(raw.get("cagr_revenue"))
             cagr_eps = float(raw.get("cagr_eps"))
@@ -980,12 +1290,18 @@ async def get_ranking_data() -> dict:
         meta_by_ticker[ticker] = {
             "name": name,
             "input_mode": input_mode,
-                "cagr_years": cagr_years,
+            "cagr_years": cagr_years,
             "cagr": {
                 "net_income": cagr_net,
                 "revenue": cagr_rev,
                 "eps": cagr_eps,
             },
+            "sector": str(fund.get("Sector") or "Unknown"),
+            "mos_pct": float(fund.get("MOS (%)") or 0.0),
+            "div_yield_pct": float(fund.get("Dividend Yield (%)") or 0.0),
+            "quality_score": fund.get("Quality Score"),
+            "quality_label": str(fund.get("Quality Label") or "-"),
+            "cagr_all_zero": bool(abs(cagr_net) <= 1e-9 and abs(cagr_rev) <= 1e-9 and abs(cagr_eps) <= 1e-9),
         }
 
     if not results:
@@ -1017,13 +1333,35 @@ async def get_ranking_data() -> dict:
                 "category": info.get("category"),
             }
 
+        hybrid_score = (scores.get("FUZZY_AHP_TOPSIS") or {}).get("score")
+        hybrid_score_num = float(hybrid_score) if hybrid_score is not None else None
+        if hybrid_score_num is not None and hybrid_score_num < exclude_threshold:
+            unranked.append(
+                {
+                    "ticker": t,
+                    "name": meta.get("name") or t,
+                    "reason": f"Excluded from consideration (Hybrid score < {exclude_threshold:.2f})",
+                }
+            )
+            continue
+
+        cagr_years = int(meta.get("cagr_years") or 0)
+        cagr_reliability = "high" if cagr_years >= 5 else ("medium" if cagr_years >= 3 else ("low" if cagr_years >= 2 else "insufficient"))
+
         ranked.append(
             {
                 "ticker": t,
                 "name": meta.get("name") or t,
                 "input_mode": meta.get("input_mode") or "annual",
-                "cagr_years": meta.get("cagr_years") or 0,
+                "cagr_years": cagr_years,
                 "cagr": meta.get("cagr") or {},
+                "sector": meta.get("sector") or "Unknown",
+                "mos_pct": meta.get("mos_pct"),
+                "div_yield_pct": meta.get("div_yield_pct"),
+                "quality_score": meta.get("quality_score"),
+                "quality_label": meta.get("quality_label") or "-",
+                "cagr_reliability": cagr_reliability,
+                "cagr_all_zero": bool(meta.get("cagr_all_zero")),
                 "scores": scores,
             }
         )
@@ -1084,7 +1422,8 @@ async def calibrate_thresholds(payload: ThresholdCalibrationRequest) -> dict:
         if not has_direct and not has_annual:
             continue
 
-        if has_direct:
+        stored_mode = str(raw.get("input_mode") or "").strip().lower()
+        if stored_mode == "direct" and has_direct:
             cagr_net = float(raw.get("cagr_net_income"))
             cagr_rev = float(raw.get("cagr_revenue"))
             cagr_eps = float(raw.get("cagr_eps"))
