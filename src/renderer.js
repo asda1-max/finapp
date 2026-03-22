@@ -69,12 +69,25 @@ function buildCardHtml(ticker, s, options = {}) {
   const mos = formatPercent(s['MOS (%)']);
   const pbv = formatNumber(s['PBV']);
   const divYield = formatPercent(s['Dividend Yield (%)']);
+  const divGrowth = formatPercent(s['Dividend Growth (%)']);
+  const payoutRatio = formatPercent(s['Payout Ratio (%)']);
+  const payoutPenalty =
+    s['Payout Penalty'] == null || Number.isNaN(Number(s['Payout Penalty']))
+      ? '-'
+      : Number(s['Payout Penalty']).toFixed(2);
   const buyDecision = s['Decision Buy'] ?? 'NO BUY';
+  const finalDecision = s['Final Decision Buy'] ?? buyDecision;
+  const executionDecision = s['Execution Decision'] ?? buyDecision;
+  const safetyCheck = s['Safety Check'] ?? '-';
   const discountDecision = s['Decision Discount'] ?? '-';
   const dividendDecision = s['Decision Dividend'] ?? '-';
   const hybridScoreValue = typeof s['Hybrid Score'] === 'number' ? s['Hybrid Score'] : null;
   const hybridScore = hybridScoreValue != null ? hybridScoreValue.toFixed(3) : '-';
+  const finalHybridScoreValue =
+    typeof s['Final Hybrid Score'] === 'number' ? s['Final Hybrid Score'] : hybridScoreValue;
+  const finalHybridScore = finalHybridScoreValue != null ? finalHybridScoreValue.toFixed(3) : '-';
   const hybridCategory = s['Hybrid Category'] ?? '-';
+  const finalHybridCategory = s['Final Hybrid Category'] ?? hybridCategory;
   const cagrWarningHtml = cagrReady
     ? ''
     : `
@@ -88,12 +101,12 @@ function buildCardHtml(ticker, s, options = {}) {
       class="rounded-2xl border border-slate-800 bg-slate-900/80 p-3 sm:p-4 shadow-sm shadow-slate-900/70 cursor-pointer hover:border-sky-500 hover:bg-slate-900"
       data-ticker="${ticker}"
     >
-      <header class="mb-2 flex items-baseline justify-between gap-2">
-        <div>
-          <h2 class="text-sm font-semibold text-slate-50 truncate" title="${name}">${name}</h2>
-          <p class="text-[10px] uppercase text-slate-500">${ticker}</p>
+      <header class="mb-2 flex items-start justify-between gap-2">
+        <div class="min-w-0 flex-1 pr-1">
+          <h2 class="text-sm font-semibold leading-tight text-slate-50 truncate" title="${name}">${name}</h2>
+          <p class="mt-0.5 text-[10px] uppercase text-slate-500">${ticker}</p>
         </div>
-        <div class="flex items-center gap-1">
+        <div class="flex shrink-0 items-center gap-1 whitespace-nowrap">
           <span class="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-emerald-300">MOS ${mos}</span>
           <button
             type="button"
@@ -182,18 +195,52 @@ function buildCardHtml(ticker, s, options = {}) {
           <span class="text-slate-400">Dividend Yield</span>
           <span class="font-medium">${divYield}</span>
         </div>
+        <div class="flex justify-between gap-2">
+          <span class="text-slate-400">Dividend Growth</span>
+          <span class="font-medium">${divGrowth}</span>
+        </div>
+        <div class="flex justify-between gap-2">
+          <span class="text-slate-400">Payout Ratio</span>
+          <span class="font-medium">${payoutRatio}</span>
+        </div>
+        <div class="flex justify-between gap-2">
+          <span class="text-slate-400">Payout Penalty</span>
+          <span class="font-medium">${payoutPenalty}</span>
+        </div>
         <hr class="my-1 border-slate-800" />
         <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400">Keputusan</span>
+          <span class="text-slate-400">Base Signal (Hybrid)</span>
           <span class="font-semibold ${buyDecision === 'BUY' ? 'text-emerald-400' : 'text-slate-400'}">${buyDecision}</span>
         </div>
         <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400">Hybrid Score</span>
+          <span class="text-slate-400">Final Signal (Detailed)</span>
+          <span class="font-semibold ${finalDecision === 'BUY' ? 'text-emerald-300' : 'text-slate-400'}">${finalDecision}</span>
+        </div>
+        <div class="flex justify-between gap-2 text-[10px]">
+          <span class="text-slate-400">Final Execution</span>
+          <span class="font-semibold ${
+            executionDecision === 'BUY'
+              ? 'text-emerald-300'
+              : executionDecision === 'HOLD'
+                ? 'text-amber-300'
+                : 'text-slate-400'
+          }">${executionDecision}</span>
+        </div>
+        <div class="flex justify-between gap-2 text-[10px]">
+          <span class="text-slate-400">Base Score</span>
           <span class="font-medium text-cyan-300">${hybridScore}</span>
         </div>
         <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400">Hybrid Category</span>
-          <span class="font-medium text-emerald-300">${hybridCategory}</span>
+          <span class="text-slate-400">Final Score</span>
+          <span class="font-medium text-emerald-300">${finalHybridScore}</span>
+        </div>
+        <div class="flex justify-between gap-2 text-[10px]">
+          <span class="text-slate-400">Final Category</span>
+          <span class="font-medium text-emerald-300">${finalHybridCategory}</span>
+        </div>
+        <div class="flex justify-between gap-2 text-[10px]">
+          <span class="text-slate-400">Safety Check</span>
+          <span class="font-medium text-amber-300">${safetyCheck}</span>
         </div>
         ${cagrWarningHtml}
         <div class="flex justify-between gap-2 text-[10px]">
@@ -331,6 +378,7 @@ function init() {
 
   const input = document.getElementById('ticker-input');
   const button = document.getElementById('ticker-submit');
+  const refreshAllBtn = document.getElementById('refresh-all-btn');
   const resetAllBtn = document.getElementById('reset-all-btn');
   const resetModal = document.getElementById('reset-modal');
   const resetConfirmInput = document.getElementById('reset-confirm-input');
@@ -347,6 +395,12 @@ function init() {
       if (event.key === 'Enter') {
         loadSingleTicker(input.value);
       }
+    });
+  }
+
+  if (refreshAllBtn) {
+    refreshAllBtn.addEventListener('click', () => {
+      loadSavedTickers();
     });
   }
 

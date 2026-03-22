@@ -14,6 +14,13 @@ function formatPercent(value) {
   return `${Number(value).toFixed(2)}%`;
 }
 
+function formatSignedPercent(value) {
+  if (value == null || Number.isNaN(Number(value))) return '-';
+  const num = Number(value);
+  const sign = num > 0 ? '+' : '';
+  return `${sign}${num.toFixed(2)}%`;
+}
+
 function formatNumber(value) {
   if (value == null || Number.isNaN(Number(value))) return '-';
   const num = Number(value);
@@ -92,6 +99,11 @@ function renderFundamentals(ticker, stock) {
   const mcEl = document.getElementById('fund-marketcap');
   const bvpEl = document.getElementById('fund-bvp');
   const grahamEl = document.getElementById('fund-graham');
+  const divGrowthEl = document.getElementById('fund-div-growth');
+  const payoutEl = document.getElementById('fund-payout');
+  const payoutPenaltyEl = document.getElementById('fund-payout-penalty');
+  const execEl = document.getElementById('fund-exec');
+  const safetyEl = document.getElementById('fund-safety');
 
   const name = stock['Name'] ?? ticker;
   const price = formatNumber(stock['Price']);
@@ -113,6 +125,14 @@ function renderFundamentals(ticker, stock) {
   const marketCap = formatNumber(stock['Market Cap']);
   const bvpPerS = formatNumber(stock['BVP Per S']);
   const graham = formatNumber(stock['Graham Number']);
+  const divGrowth = formatPercent(stock['Dividend Growth (%)']);
+  const payoutRatio = formatPercent(stock['Payout Ratio (%)']);
+  const payoutPenalty =
+    stock['Payout Penalty'] == null || Number.isNaN(Number(stock['Payout Penalty']))
+      ? '-'
+      : Number(stock['Payout Penalty']).toFixed(2);
+  const executionDecision = stock['Execution Decision'] ?? '-';
+  const safetyCheck = stock['Safety Check'] ?? '-';
 
   if (nameEl) nameEl.textContent = name;
   if (tickerEl) tickerEl.textContent = ticker;
@@ -135,6 +155,11 @@ function renderFundamentals(ticker, stock) {
   if (mcEl) mcEl.textContent = marketCap;
   if (bvpEl) bvpEl.textContent = bvpPerS;
   if (grahamEl) grahamEl.textContent = graham;
+  if (divGrowthEl) divGrowthEl.textContent = divGrowth;
+  if (payoutEl) payoutEl.textContent = payoutRatio;
+  if (payoutPenaltyEl) payoutPenaltyEl.textContent = payoutPenalty;
+  if (execEl) execEl.textContent = executionDecision;
+  if (safetyEl) safetyEl.textContent = safetyCheck;
 
   summary.classList.remove('hidden');
 }
@@ -144,11 +169,46 @@ function renderMcdmResult(ticker, methods) {
   if (!root) return;
 
   const entries = [
-    { name: 'VIKOR', key: 'VIKOR', color: 'text-emerald-300' },
-    { name: 'TOPSIS', key: 'TOPSIS', color: 'text-sky-300' },
-    { name: 'SAW', key: 'SAW', color: 'text-amber-300' },
-    { name: 'AHP', key: 'AHP', color: 'text-fuchsia-300' },
-    { name: 'Hybrid Fuzzy AHP-TOPSIS', key: 'FUZZY_AHP_TOPSIS', color: 'text-cyan-300' },
+    {
+      name: 'SAW • Growth Score',
+      key: 'SAW',
+      color: 'text-amber-300',
+      signalLabel: 'Growth Check',
+      meaning: 'Apakah bisnis tumbuh kencang?',
+      useFinalDecision: false,
+    },
+    {
+      name: 'AHP • Growth Score (weighted)',
+      key: 'AHP',
+      color: 'text-fuchsia-300',
+      signalLabel: 'Growth Check (Weighted)',
+      meaning: 'Sama, dengan bobot AHP.',
+      useFinalDecision: false,
+    },
+    {
+      name: 'TOPSIS • Relative Quality Score',
+      key: 'TOPSIS',
+      color: 'text-sky-300',
+      signalLabel: 'Relative Quality',
+      meaning: 'Seberapa baik vs peer universe.',
+      useFinalDecision: false,
+    },
+    {
+      name: 'VIKOR • Regret Score',
+      key: 'VIKOR',
+      color: 'text-emerald-300',
+      signalLabel: 'Regret Check',
+      meaning: 'Seberapa besar risiko menyesal beli?',
+      useFinalDecision: false,
+    },
+    {
+      name: 'Hybrid • Final Decision',
+      key: 'FUZZY_AHP_TOPSIS',
+      color: 'text-cyan-300',
+      signalLabel: 'Final Decision',
+      meaning: 'Sesuai profil: Dividend > Growth > Value.',
+      useFinalDecision: true,
+    },
   ];
 
   entries.forEach((m) => {
@@ -156,23 +216,118 @@ function renderMcdmResult(ticker, methods) {
     if (!info) return;
     const decision = info.decision || 'NO BUY';
     const score = typeof info.score === 'number' ? info.score : null;
+    const category = info.category || '-';
+    const signalValue = m.useFinalDecision ? decision : decision === 'BUY' ? 'Pass' : 'Watch';
+    const signalColor =
+      signalValue === 'BUY' || signalValue === 'Pass'
+        ? 'text-emerald-300'
+        : signalValue === 'Watch'
+          ? 'text-amber-300'
+          : 'text-slate-400';
 
     const card = document.createElement('div');
     card.className = 'rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-[11px]';
     card.innerHTML = `
       <div class="flex items-baseline justify-between gap-2">
         <span class="text-slate-300 font-medium">${m.name}</span>
-        <span class="text-[10px] rounded-full bg-slate-800 px-2 py-0.5 ${
-          decision === 'BUY' ? 'text-emerald-300' : 'text-slate-400'
-        }">${decision}</span>
+        <span class="text-[10px] rounded-full bg-slate-800 px-2 py-0.5 ${signalColor}">${signalValue}</span>
       </div>
       <div class="mt-1 flex justify-between text-slate-400">
-        <span>Score</span>
+        <span>${m.signalLabel}</span>
         <span class="${m.color}">${score != null ? score.toFixed(3) : '-'}</span>
       </div>
+      ${
+        m.useFinalDecision
+          ? `<div class="mt-1 flex justify-between text-[10px] text-slate-400"><span>Tier</span><span class="text-emerald-300">${category}</span></div>`
+          : ''
+      }
+      <div class="mt-1 text-[10px] text-slate-500">${m.meaning}</div>
     `;
     root.appendChild(card);
   });
+}
+
+function perfTextClass(value) {
+  if (value == null || Number.isNaN(Number(value))) return 'text-slate-500';
+  return Number(value) >= 0 ? 'text-emerald-300' : 'text-rose-300';
+}
+
+function renderPerformanceOverview(data, ticker) {
+  const root = document.getElementById('performance-overview');
+  const titleEl = document.getElementById('performance-title');
+  const subtitleEl = document.getElementById('performance-subtitle');
+  const cardsEl = document.getElementById('performance-cards');
+  if (!root || !titleEl || !subtitleEl || !cardsEl) return;
+
+  const returns = data?.returns;
+  if (!returns || typeof returns !== 'object') {
+    root.classList.add('hidden');
+    return;
+  }
+
+  const asOfRaw = data?.as_of;
+  let asOfText = '-';
+  if (asOfRaw) {
+    const dt = new Date(asOfRaw);
+    if (!Number.isNaN(dt.getTime())) {
+      asOfText = dt.toLocaleDateString('en-US');
+    }
+  }
+
+  const bmName = data?.benchmark_name || data?.benchmark || 'Benchmark';
+  const symbol = data?.ticker || ticker;
+
+  titleEl.textContent = `Performance Overview: ${symbol}`;
+  subtitleEl.textContent = `Trailing total returns as of ${asOfText}. Benchmark is ${bmName}.`;
+
+  const windows = [
+    { key: 'ytd', fallbackLabel: 'YTD Return' },
+    { key: 'one_year', fallbackLabel: '1-Year Return' },
+    { key: 'three_year', fallbackLabel: '3-Year Return' },
+    { key: 'five_year', fallbackLabel: '5-Year Return' },
+  ];
+
+  cardsEl.innerHTML = '';
+  windows.forEach((w) => {
+    const row = returns[w.key] || {};
+    const label = row.label || w.fallbackLabel;
+    const assetValue = row.asset;
+    const benchmarkValue = row.benchmark;
+
+    const card = document.createElement('div');
+    card.className = 'rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-xs';
+    card.innerHTML = `
+      <div class="mb-2 text-base font-semibold text-slate-100">${label}</div>
+      <div class="flex items-center justify-between gap-2 text-[11px]">
+        <span class="text-slate-400">${symbol}</span>
+        <span class="font-semibold ${perfTextClass(assetValue)}">${formatSignedPercent(assetValue)}</span>
+      </div>
+      <div class="mt-1 flex items-center justify-between gap-2 text-[11px]">
+        <span class="text-slate-500">${bmName}</span>
+        <span class="font-semibold ${perfTextClass(benchmarkValue)}">${formatSignedPercent(
+      benchmarkValue,
+    )}</span>
+      </div>
+    `;
+    cardsEl.appendChild(card);
+  });
+
+  root.classList.remove('hidden');
+}
+
+function loadPerformanceOverview(ticker) {
+  const t = (ticker || '').trim();
+  if (!t) return;
+
+  fetch(`http://127.0.0.1:8000/performance-overview?ticker=${encodeURIComponent(t)}`)
+    .then((res) => (res.ok ? res.json() : null))
+    .then((json) => {
+      if (!json) return;
+      renderPerformanceOverview(json, t);
+    })
+    .catch(() => {
+      // abaikan error overview performa agar halaman tetap lanjut
+    });
 }
 
 function createYearInputs(index) {
@@ -437,6 +592,7 @@ function toggleInputModeUI(mode) {
   const submitBtn = document.querySelector('#cagr-form button[type="submit"]');
   const directSection = document.getElementById('direct-cagr-section');
   const help = document.getElementById('input-mode-help');
+  const annualChartSection = document.getElementById('annual-growth-chart-section');
 
   const isDirect = mode === 'direct';
 
@@ -467,6 +623,16 @@ function toggleInputModeUI(mode) {
     help.textContent = isDirect
       ? 'Mode Direct: isi kurun tahun CAGR + CAGR Net Income, EPS, dan Revenue langsung dalam persen.'
       : 'Mode Annual: isi minimal 2 tahun data Net Income, EPS, dan Revenue.';
+  }
+
+  if (annualChartSection) {
+    annualChartSection.classList.toggle('hidden', isDirect);
+    annualChartSection.classList.toggle('opacity-60', isDirect);
+  }
+
+  if (isDirect && cagrChart) {
+    cagrChart.destroy();
+    cagrChart = null;
   }
 }
 
@@ -731,6 +897,7 @@ function init() {
 
     // Ambil histori harga (default: harian, 3 bulan terakhir)
     loadPriceHistory(t, '1d');
+    loadPerformanceOverview(t);
 
     fetch(`http://127.0.0.1:8000/cagr-raw/${encodeURIComponent(t)}`)
       .then((res) => (res.ok ? res.json() : null))

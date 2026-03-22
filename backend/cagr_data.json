@@ -1,3 +1,44 @@
 {
-  "items": {}
+  "items": {
+    "bbri.jk": {
+      "net_income": [],
+      "revenue": [],
+      "eps": [],
+      "cagr_net_income": 12.0,
+      "cagr_revenue": 15.0,
+      "cagr_eps": 132.0,
+      "cagr_years": 5,
+      "input_mode": "direct"
+    },
+    "bbca.jk": {
+      "net_income": [],
+      "revenue": [],
+      "eps": [],
+      "cagr_net_income": 12.0,
+      "cagr_revenue": 15.0,
+      "cagr_eps": 13.0,
+      "cagr_years": 5,
+      "input_mode": "direct"
+    },
+    "mpmx.jk": {
+      "net_income": [],
+      "revenue": [],
+      "eps": [],
+      "cagr_net_income": 5.0,
+      "cagr_revenue": 4.0,
+      "cagr_eps": -2.0,
+      "cagr_years": 5,
+      "input_mode": "direct"
+    },
+    "ptba.jk": {
+      "net_income": [],
+      "revenue": [],
+      "eps": [],
+      "cagr_net_income": 8.0,
+      "cagr_revenue": 8.0,
+      "cagr_eps": 8.0,
+      "cagr_years": 5,
+      "input_mode": "direct"
+    }
+  }
 }

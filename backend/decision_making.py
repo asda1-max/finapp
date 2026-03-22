@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, List, Sequence
+import json
 
 import numpy as np
+
+
+THRESHOLDS_JSON_PATH = Path(__file__).with_name("thresholds.json")
 
 
 @dataclass
@@ -332,33 +337,75 @@ def _method_vikor_scores(norm_matrix: np.ndarray) -> np.ndarray:
 
 
 def _hybrid_config(use_cagr: bool) -> tuple[np.ndarray, float, float, float]:
-    """Return (weights, recommended_thr, buy_thr, risk_thr) for hybrid mode."""
+    """Return (weights, recommended_thr, buy_thr, risk_thr) for hybrid mode.
+
+    Mendukung override dari `thresholds.json`:
+    - hybrid_weights.use_cagr / hybrid_weights.no_cagr
+    - hybrid.use_cagr / hybrid.no_cagr (recommended, buy, risk)
+    """
 
     if use_cagr:
-        weights = np.array([
-            0.16,  # ROE
-            0.14,  # Net Income CAGR
-            0.10,  # Dividend Yield
-            0.15,  # MOS
-            0.10,  # PBV Score
-            0.10,  # PER Score
-            0.12,  # Revenue CAGR
-            0.13,  # EPS CAGR
+        default_weights = np.array([
+            0.18,  # ROE
+            0.06,  # Net Income CAGR
+            0.12,  # Dividend Yield
+            0.20,  # MOS
+            0.15,  # PBV Score
+            0.15,  # PER Score
+            0.08,  # Revenue CAGR
+            0.12,  # EPS CAGR
         ], dtype=float)
-        return weights, 0.62, 0.52, 0.40
+        default_thr = (0.52, 0.44, 0.34)
+        mode_key = "use_cagr"
+    else:
+        default_weights = np.array([
+            0.20,  # ROE
+            0.00,  # Net Income CAGR disabled
+            0.10,  # Dividend Yield
+            0.30,  # MOS
+            0.20,  # PBV Score
+            0.20,  # PER Score
+            0.00,  # Revenue CAGR disabled
+            0.00,  # EPS CAGR disabled
+        ], dtype=float)
+        default_thr = (0.655, 0.555, 0.455)
+        mode_key = "no_cagr"
 
-    # dashboard mode (tanpa CAGR)
-    weights = np.array([
-        0.30,  # ROE
-        0.00,  # Net Income CAGR disabled
-        0.15,  # Dividend Yield
-        0.25,  # MOS
-        0.15,  # PBV Score
-        0.15,  # PER Score
-        0.00,  # Revenue CAGR disabled
-        0.00,  # EPS CAGR disabled
-    ], dtype=float)
-    return weights, 0.58, 0.48, 0.36
+    weights = default_weights.copy()
+    recommended_thr, buy_thr, risk_thr = default_thr
+
+    try:
+        raw = json.loads(THRESHOLDS_JSON_PATH.read_text(encoding="utf-8")) if THRESHOLDS_JSON_PATH.exists() else {}
+    except (json.JSONDecodeError, OSError):
+        raw = {}
+
+    if isinstance(raw, dict):
+        w_cfg = raw.get("hybrid_weights") if isinstance(raw.get("hybrid_weights"), dict) else {}
+        w_raw = w_cfg.get(mode_key)
+        if isinstance(w_raw, list) and len(w_raw) == 8:
+            try:
+                w = np.array([float(x) for x in w_raw], dtype=float)
+                if np.all(np.isfinite(w)) and np.all(w >= 0) and float(w.sum()) > 0:
+                    weights = w
+            except (TypeError, ValueError):
+                pass
+
+        h_cfg = raw.get("hybrid") if isinstance(raw.get("hybrid"), dict) else {}
+        mode_thr = h_cfg.get(mode_key) if isinstance(h_cfg.get(mode_key), dict) else {}
+        rec = mode_thr.get("recommended")
+        buy = mode_thr.get("buy")
+        risk = mode_thr.get("risk")
+        try:
+            if rec is not None and buy is not None and risk is not None:
+                rec_f = float(rec)
+                buy_f = float(buy)
+                risk_f = float(risk)
+                if 0.0 <= risk_f <= buy_f <= rec_f <= 1.0:
+                    recommended_thr, buy_thr, risk_thr = rec_f, buy_f, risk_f
+        except (TypeError, ValueError):
+            pass
+
+    return weights, recommended_thr, buy_thr, risk_thr
 
 
 def _method_hybrid_scores(full_matrix: np.ndarray, use_cagr: bool) -> tuple[np.ndarray, float, float, float]:
@@ -368,20 +415,17 @@ def _method_hybrid_scores(full_matrix: np.ndarray, use_cagr: bool) -> tuple[np.n
     return scores, rec_thr, buy_thr, risk_thr
 
 
-def _decision_saw(score: float, mos: float) -> str:
-    return "BUY" if score >= 0.56 or (mos > 15.0 and score >= 0.48) else "NO BUY"
+def _decision_saw(score, mos):
+    return "BUY" if score >= 0.365 or (mos > 15.0 and score >= 0.300) else "NO BUY"
 
+def _decision_ahp(score, mos):
+    return "BUY" if score >= 0.430 or (mos > 15.0 and score >= 0.360) else "NO BUY"
 
-def _decision_ahp(score: float, mos: float) -> str:
-    return "BUY" if score >= 0.60 or (mos > 15.0 and score >= 0.52) else "NO BUY"
+def _decision_topsis(score, mos):
+    return "BUY" if score >= 0.405 or (mos > 15.0 and score >= 0.330) else "NO BUY"
 
-
-def _decision_topsis(score: float, mos: float) -> str:
-    return "BUY" if score >= 0.50 or (mos > 15.0 and score >= 0.44) else "NO BUY"
-
-
-def _decision_vikor(score: float, mos: float) -> str:
-    return "BUY" if score >= 0.58 or (mos > 15.0 and score >= 0.50) else "NO BUY"
+def _decision_vikor(score, mos):
+    return "BUY" if score >= 0.450 or (mos > 15.0 and score >= 0.370) else "NO BUY"
 
 
 def _decision_hybrid(score: float, use_cagr: bool) -> tuple[str, str]:

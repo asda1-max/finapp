@@ -1,0 +1,66 @@
+{
+  "methods": {
+    "SAW": {
+      "buy": 0.725,
+      "mos_boost_buy": 0.645,
+      "mos_trigger": 15.0
+    },
+    "AHP": {
+      "buy": 0.8250000000000001,
+      "mos_boost_buy": 0.7450000000000001,
+      "mos_trigger": 15.0
+    },
+    "TOPSIS": {
+      "buy": 0.705,
+      "mos_boost_buy": 0.625,
+      "mos_trigger": 15.0
+    },
+    "VIKOR": {
+      "buy": 0.785,
+      "mos_boost_buy": 0.7050000000000001,
+      "mos_trigger": 15.0
+    }
+  },
+  "hybrid": {
+    "use_cagr": {
+      "recommended": 0.52,
+      "buy": 0.44,
+      "risk": 0.34
+    },
+    "no_cagr": {
+      "recommended": 0.655,
+      "buy": 0.555,
+      "risk": 0.455
+    }
+  },
+  "hybrid_weights": {
+    "use_cagr": [
+      0.18,
+      0.06,
+      0.12,
+      0.2,
+      0.15,
+      0.15,
+      0.08,
+      0.12
+    ],
+    "no_cagr": [
+      0.2,
+      0.0,
+      0.1,
+      0.3,
+      0.2,
+      0.2,
+      0.0,
+      0.0
+    ]
+  },
+  "meta": {
+    "updated_at": "2026-03-22T03:28:31.052358+00:00",
+    "horizon_days": 63,
+    "target_return_pct": 8.0,
+    "lookback_period": "5y",
+    "min_samples": 120,
+    "hybrid_config_updated_at": "2026-03-22T04:40:22.616933+00:00"
+  }
+}

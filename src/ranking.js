@@ -14,13 +14,19 @@ function formatScore(v) {
 
 function methodLabel(key) {
   const map = {
-    FUZZY_AHP_TOPSIS: 'Hybrid Fuzzy AHP-TOPSIS',
-    TOPSIS: 'TOPSIS',
-    SAW: 'SAW',
-    AHP: 'AHP',
-    VIKOR: 'VIKOR',
+    FUZZY_AHP_TOPSIS: 'Hybrid • Final Decision',
+    TOPSIS: 'TOPSIS • Relative Quality Score',
+    SAW: 'SAW • Growth Score',
+    AHP: 'AHP • Growth Score (weighted)',
+    VIKOR: 'VIKOR • Regret Score',
   };
   return map[key] || key;
+}
+
+function methodSignal(method, decision) {
+  const d = String(decision || '-').toUpperCase();
+  if (method === 'FUZZY_AHP_TOPSIS') return d === 'BUY' ? 'BUY' : 'NO BUY';
+  return d === 'BUY' ? 'Pass' : 'Watch';
 }
 
 function cagrYearsLabel(years, cagr) {
@@ -104,6 +110,14 @@ function renderRanked(payload) {
     ranked.forEach((it, idx) => {
       const scoreObj = it?.scores?.[method] || {};
       const yearsLabel = cagrYearsLabel(it?.cagr_years, it?.cagr);
+      const signal = methodSignal(method, scoreObj.decision);
+      const signalClass =
+        signal === 'BUY' || signal === 'Pass'
+          ? 'text-emerald-300'
+          : signal === 'Watch'
+            ? 'text-amber-300'
+            : 'text-slate-400';
+      const category = method === 'FUZZY_AHP_TOPSIS' ? scoreObj.category || '-' : '-';
       const tr = document.createElement('tr');
       tr.className = 'cursor-pointer hover:bg-slate-800/40';
       tr.setAttribute('data-ticker', it.ticker || '');
@@ -115,8 +129,8 @@ function renderRanked(payload) {
         <td class="px-2 py-2 text-right">${it.cagr_years || '-'}</td>
         <td class="px-2 py-2 text-amber-300">${yearsLabel}</td>
         <td class="px-2 py-2 text-right text-cyan-300">${formatScore(scoreObj.score)}</td>
-        <td class="px-2 py-2 ${scoreObj.decision === 'BUY' ? 'text-emerald-300' : 'text-slate-400'}">${scoreObj.decision || '-'}</td>
-        <td class="px-2 py-2 text-amber-300">${scoreObj.category || '-'}</td>
+        <td class="px-2 py-2 ${signalClass}">${signal}</td>
+        <td class="px-2 py-2 text-amber-300">${category}</td>
         <td class="px-2 py-2 text-right">${formatPercent(it?.cagr?.net_income)}</td>
         <td class="px-2 py-2 text-right">${formatPercent(it?.cagr?.eps)}</td>
         <td class="px-2 py-2 text-right">${formatPercent(it?.cagr?.revenue)}</td>

@@ -2,10 +2,12 @@ from typing import List
 from pathlib import Path
 import json
 import math
+from datetime import datetime, timezone, date
 
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import numpy as np
 import yfinance as yf
 
 from backend.data import get_stock_data
@@ -26,6 +28,7 @@ app.add_middleware(
 
 DATA_JSON_PATH = Path(__file__).with_name("data.json")
 CAGR_JSON_PATH = Path(__file__).with_name("cagr_data.json")
+THRESHOLDS_JSON_PATH = Path(__file__).with_name("thresholds.json")
 
 
 class TickerPayload(BaseModel):
@@ -57,6 +60,26 @@ class CagrDirectRequest(BaseModel):
 
 class ResetPayload(BaseModel):
     confirmation: str
+
+
+class ThresholdCalibrationRequest(BaseModel):
+    horizon_days: int = 63
+    target_return_pct: float = 8.0
+    lookback_period: str = "5y"
+    min_samples: int = 120
+    save: bool = True
+
+
+class HybridModeConfigPayload(BaseModel):
+    weights: List[float]
+    recommended: float
+    buy: float
+    risk: float
+
+
+class HybridConfigPayload(BaseModel):
+    use_cagr: HybridModeConfigPayload
+    no_cagr: HybridModeConfigPayload
 
 
 def _load_cagr_data() -> dict:
@@ -157,6 +180,279 @@ def _has_direct_cagr(item: dict) -> bool:
     return n is not None and r is not None and e is not None
 
 
+def _load_threshold_data() -> dict:
+    if not THRESHOLDS_JSON_PATH.exists():
+        return {}
+    try:
+        raw = json.loads(THRESHOLDS_JSON_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def _save_threshold_data(payload: dict) -> None:
+    THRESHOLDS_JSON_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def _default_hybrid_mode_config(use_cagr: bool) -> dict:
+    if use_cagr:
+        return {
+            "weights": [0.18, 0.06, 0.12, 0.20, 0.15, 0.15, 0.08, 0.12],
+            "recommended": 0.52,
+            "buy": 0.44,
+            "risk": 0.34,
+        }
+    return {
+        "weights": [0.20, 0.00, 0.10, 0.30, 0.20, 0.20, 0.00, 0.00],
+        "recommended": 0.655,
+        "buy": 0.555,
+        "risk": 0.455,
+    }
+
+
+def _normalize_hybrid_mode_config(raw: dict, default: dict) -> dict:
+    out = {
+        "weights": list(default["weights"]),
+        "recommended": float(default["recommended"]),
+        "buy": float(default["buy"]),
+        "risk": float(default["risk"]),
+    }
+
+    if not isinstance(raw, dict):
+        return out
+
+    weights_raw = raw.get("weights")
+    if isinstance(weights_raw, list) and len(weights_raw) == 8:
+        try:
+            w = [float(x) for x in weights_raw]
+            if all(np.isfinite(x) and x >= 0 for x in w) and sum(w) > 0:
+                out["weights"] = w
+        except (TypeError, ValueError):
+            pass
+
+    try:
+        rec = float(raw.get("recommended"))
+        buy = float(raw.get("buy"))
+        risk = float(raw.get("risk"))
+        if 0.0 <= risk <= buy <= rec <= 1.0:
+            out["recommended"] = rec
+            out["buy"] = buy
+            out["risk"] = risk
+    except (TypeError, ValueError):
+        pass
+
+    return out
+
+
+def _get_hybrid_config_from_thresholds() -> dict:
+    raw = _load_threshold_data()
+
+    default_use = _default_hybrid_mode_config(True)
+    default_no = _default_hybrid_mode_config(False)
+
+    hybrid_weights = raw.get("hybrid_weights") if isinstance(raw.get("hybrid_weights"), dict) else {}
+    hybrid_thresholds = raw.get("hybrid") if isinstance(raw.get("hybrid"), dict) else {}
+
+    use_raw = {
+        "weights": hybrid_weights.get("use_cagr"),
+        "recommended": (hybrid_thresholds.get("use_cagr") or {}).get("recommended"),
+        "buy": (hybrid_thresholds.get("use_cagr") or {}).get("buy"),
+        "risk": (hybrid_thresholds.get("use_cagr") or {}).get("risk"),
+    }
+    no_raw = {
+        "weights": hybrid_weights.get("no_cagr"),
+        "recommended": (hybrid_thresholds.get("no_cagr") or {}).get("recommended"),
+        "buy": (hybrid_thresholds.get("no_cagr") or {}).get("buy"),
+        "risk": (hybrid_thresholds.get("no_cagr") or {}).get("risk"),
+    }
+
+    return {
+        "use_cagr": _normalize_hybrid_mode_config(use_raw, default_use),
+        "no_cagr": _normalize_hybrid_mode_config(no_raw, default_no),
+    }
+
+
+def _forward_label_from_price(
+    ticker: str,
+    *,
+    horizon_days: int,
+    target_return_pct: float,
+    lookback_period: str,
+    min_samples: int,
+) -> dict | None:
+    t = (ticker or "").strip()
+    if not t:
+        return None
+
+    try:
+        hist = yf.Ticker(t).history(period=lookback_period, interval="1d")
+    except Exception:
+        return None
+
+    if hist is None or hist.empty or "Close" not in hist.columns:
+        return None
+
+    close = hist["Close"].astype(float).replace([np.inf, -np.inf], np.nan).dropna()
+    if close.empty:
+        return None
+
+    fwd = (close.shift(-horizon_days) / close - 1.0) * 100.0
+    fwd = fwd.replace([np.inf, -np.inf], np.nan).dropna()
+    if len(fwd) < int(max(min_samples, 1)):
+        return None
+
+    lo, hi = np.percentile(fwd.values, [5, 95])
+    fwd_w = fwd.clip(lower=lo, upper=hi)
+
+    hit_rate = float((fwd_w >= target_return_pct).mean())
+    median_ret = float(np.median(fwd_w.values))
+    mean_ret = float(np.mean(fwd_w.values))
+
+    label = 1 if hit_rate >= 0.5 else 0
+    return {
+        "label": label,
+        "samples": int(len(fwd_w)),
+        "hit_rate": hit_rate,
+        "median_return_pct": median_ret,
+        "mean_return_pct": mean_ret,
+    }
+
+
+def _metrics_for_threshold(scores: list[float], labels: list[int], threshold: float) -> dict:
+    y = np.array(labels, dtype=int)
+    s = np.array(scores, dtype=float)
+    pred = (s >= threshold).astype(int)
+
+    tp = int(((pred == 1) & (y == 1)).sum())
+    tn = int(((pred == 0) & (y == 0)).sum())
+    fp = int(((pred == 1) & (y == 0)).sum())
+    fn = int(((pred == 0) & (y == 1)).sum())
+
+    total = max(len(y), 1)
+    accuracy = (tp + tn) / total
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    f1 = (2.0 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+
+    tpr = recall
+    tnr = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+    balanced_accuracy = 0.5 * (tpr + tnr)
+
+    return {
+        "threshold": float(threshold),
+        "accuracy": float(accuracy),
+        "balanced_accuracy": float(balanced_accuracy),
+        "precision": float(precision),
+        "recall": float(recall),
+        "f1": float(f1),
+        "confusion": {"tp": tp, "tn": tn, "fp": fp, "fn": fn},
+    }
+
+
+def _search_best_threshold(scores: list[float], labels: list[int]) -> dict:
+    if not scores or not labels or len(scores) != len(labels):
+        return {
+            "best": None,
+            "n": 0,
+            "positive_ratio": 0.0,
+            "note": "insufficient_samples",
+        }
+
+    y = np.array(labels, dtype=int)
+    pos_ratio = float(y.mean()) if len(y) else 0.0
+
+    grid = np.linspace(0.0, 1.0, 201)
+    best = None
+    best_key = None
+
+    for thr in grid:
+        m = _metrics_for_threshold(scores, labels, float(thr))
+        # Prioritas: balanced_accuracy -> f1 -> accuracy
+        key = (m["balanced_accuracy"], m["f1"], m["accuracy"])
+        if best is None or key > best_key:
+            best = m
+            best_key = key
+
+    return {
+        "best": best,
+        "n": int(len(scores)),
+        "positive_ratio": pos_ratio,
+        "note": "ok",
+    }
+
+
+def _extract_price_points(symbol: str, period: str = "10y") -> list[tuple[date, float]]:
+    """Ambil deret harga adjusted close harian untuk perhitungan return."""
+
+    s = (symbol or "").strip()
+    if not s:
+        return []
+
+    try:
+        hist = yf.Ticker(s).history(period=period, interval="1d", auto_adjust=False)
+    except Exception:
+        return []
+
+    if hist is None or hist.empty:
+        return []
+
+    price_col = "Adj Close" if "Adj Close" in hist.columns else "Close"
+    points: list[tuple[date, float]] = []
+    for idx, row in hist.iterrows():
+        raw = row.get(price_col)
+        if raw is None:
+            continue
+        try:
+            px = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if not np.isfinite(px) or px <= 0:
+            continue
+        points.append((idx.date(), px))
+
+    points.sort(key=lambda x: x[0])
+    return points
+
+
+def _price_on_or_before(points: list[tuple[date, float]], target: date) -> float | None:
+    for d, px in reversed(points):
+        if d <= target:
+            return px
+    return None
+
+
+def _price_on_or_after(points: list[tuple[date, float]], target: date, end_date: date) -> float | None:
+    for d, px in points:
+        if d >= target and d <= end_date:
+            return px
+    return None
+
+
+def _subtract_years(d: date, years: int) -> date:
+    y = d.year - years
+    m = d.month
+    day = d.day
+    while day > 28:
+        try:
+            return date(y, m, day)
+        except ValueError:
+            day -= 1
+    return date(y, m, day)
+
+
+def _compute_return_pct(points: list[tuple[date, float]], start_date: date, end_date: date) -> float | None:
+    if not points:
+        return None
+    if start_date > end_date:
+        return None
+
+    start_px = _price_on_or_after(points, start_date, end_date)
+    end_px = _price_on_or_before(points, end_date)
+    if start_px is None or end_px is None or start_px <= 0:
+        return None
+    return float((end_px / start_px - 1.0) * 100.0)
+
+
 @app.get("/")
 async def root():
     return {"message": "Saham FastFetch API. Gunakan /stocks dan /saved-tickers endpoint."}
@@ -186,6 +482,60 @@ async def get_saved_tickers() -> dict:
 
     tickers = _load_saved_tickers()
     return {"tickers": tickers}
+
+
+@app.get("/hybrid-config")
+async def get_hybrid_config() -> dict:
+    """Ambil konfigurasi bobot hybrid (use_cagr/no_cagr)."""
+
+    return _get_hybrid_config_from_thresholds()
+
+
+@app.post("/hybrid-config")
+async def save_hybrid_config(payload: HybridConfigPayload) -> dict:
+    """Simpan konfigurasi bobot hybrid (use_cagr/no_cagr)."""
+
+    use_raw = payload.use_cagr.model_dump() if hasattr(payload.use_cagr, "model_dump") else payload.use_cagr.dict()
+    no_raw = payload.no_cagr.model_dump() if hasattr(payload.no_cagr, "model_dump") else payload.no_cagr.dict()
+
+    use_cfg = _normalize_hybrid_mode_config(use_raw, _default_hybrid_mode_config(True))
+    no_cfg = _normalize_hybrid_mode_config(no_raw, _default_hybrid_mode_config(False))
+
+    existing = _load_threshold_data()
+    methods_cfg = existing.get("methods") if isinstance(existing.get("methods"), dict) else {}
+    hybrid_cfg_existing = existing.get("hybrid") if isinstance(existing.get("hybrid"), dict) else {}
+    meta_cfg = existing.get("meta") if isinstance(existing.get("meta"), dict) else {}
+
+    hybrid_cfg_existing["use_cagr"] = {
+        "recommended": use_cfg["recommended"],
+        "buy": use_cfg["buy"],
+        "risk": use_cfg["risk"],
+    }
+    hybrid_cfg_existing["no_cagr"] = {
+        "recommended": no_cfg["recommended"],
+        "buy": no_cfg["buy"],
+        "risk": no_cfg["risk"],
+    }
+
+    out = {
+        "methods": methods_cfg,
+        "hybrid": hybrid_cfg_existing,
+        "hybrid_weights": {
+            "use_cagr": use_cfg["weights"],
+            "no_cagr": no_cfg["weights"],
+        },
+        "meta": {
+            **meta_cfg,
+            "hybrid_config_updated_at": datetime.now(timezone.utc).isoformat(),
+        },
+    }
+    _save_threshold_data(out)
+
+    return {
+        "saved": True,
+        "use_cagr": use_cfg,
+        "no_cagr": no_cfg,
+    }
 
 
 @app.post("/saved-tickers")
@@ -469,6 +819,77 @@ async def get_price_history(
     }
 
 
+@app.get("/performance-overview")
+async def get_performance_overview(
+    ticker: str = Query(..., description="Ticker saham, misal: BBCA.JK"),
+    benchmark: str = Query("^JKSE", description="Benchmark index, default: ^JKSE"),
+) -> dict:
+    """Ringkasan return YTD/1Y/3Y/5Y untuk ticker vs benchmark."""
+
+    t = (ticker or "").strip()
+    bmk = (benchmark or "").strip() or "^JKSE"
+    if not t:
+        return {
+            "ticker": "",
+            "benchmark": bmk,
+            "benchmark_name": "IDX COMPOSITE",
+            "as_of": None,
+            "returns": {},
+        }
+
+    ticker_points = _extract_price_points(t, period="10y")
+    bench_points = _extract_price_points(bmk, period="10y")
+
+    if not ticker_points:
+        return {
+            "ticker": t,
+            "benchmark": bmk,
+            "benchmark_name": "IDX COMPOSITE" if bmk.upper() == "^JKSE" else bmk,
+            "as_of": None,
+            "returns": {},
+        }
+
+    ticker_last = ticker_points[-1][0]
+    bench_last = bench_points[-1][0] if bench_points else None
+    as_of = min(ticker_last, bench_last) if bench_last else ticker_last
+
+    ytd_start = date(as_of.year, 1, 1)
+    one_year_start = _subtract_years(as_of, 1)
+    three_year_start = _subtract_years(as_of, 3)
+    five_year_start = _subtract_years(as_of, 5)
+
+    returns = {
+        "ytd": {
+            "label": "YTD Return",
+            "asset": _compute_return_pct(ticker_points, ytd_start, as_of),
+            "benchmark": _compute_return_pct(bench_points, ytd_start, as_of) if bench_points else None,
+        },
+        "one_year": {
+            "label": "1-Year Return",
+            "asset": _compute_return_pct(ticker_points, one_year_start, as_of),
+            "benchmark": _compute_return_pct(bench_points, one_year_start, as_of) if bench_points else None,
+        },
+        "three_year": {
+            "label": "3-Year Return",
+            "asset": _compute_return_pct(ticker_points, three_year_start, as_of),
+            "benchmark": _compute_return_pct(bench_points, three_year_start, as_of) if bench_points else None,
+        },
+        "five_year": {
+            "label": "5-Year Return",
+            "asset": _compute_return_pct(ticker_points, five_year_start, as_of),
+            "benchmark": _compute_return_pct(bench_points, five_year_start, as_of) if bench_points else None,
+        },
+    }
+
+    return {
+        "ticker": t,
+        "benchmark": bmk,
+        "benchmark_name": "IDX COMPOSITE" if bmk.upper() == "^JKSE" else bmk,
+        "as_of": as_of.isoformat(),
+        "returns": returns,
+    }
+
+
 @app.get("/ranking-data")
 async def get_ranking_data() -> dict:
     """Kembalikan data ranking saham berdasarkan metode MCDM yang dipilih di frontend.
@@ -576,14 +997,16 @@ async def get_ranking_data() -> dict:
             "unranked": unranked,
         }
 
-    evaluated = evaluate_cagr_methods(results, use_cagr=True)
-    methods = evaluated.get("methods", {})
-
     ranked = []
     method_keys = ["FUZZY_AHP_TOPSIS", "TOPSIS", "SAW", "AHP", "VIKOR"]
     for r in results:
         t = r.ticker
         meta = meta_by_ticker.get(t) or {}
+
+        # Gunakan evaluasi per-ticker agar konsisten dengan detailed page
+        # (single-ticker absolute scoring), bukan scoring relatif antar-alternatif.
+        single_eval = evaluate_cagr_methods([r], use_cagr=True)
+        methods = single_eval.get("methods", {})
 
         scores = {}
         for mk in method_keys:
@@ -611,4 +1034,194 @@ async def get_ranking_data() -> dict:
         "unranked_count": len(unranked),
         "ranked": ranked,
         "unranked": unranked,
+    }
+
+
+@app.post("/calibrate-thresholds")
+async def calibrate_thresholds(payload: ThresholdCalibrationRequest) -> dict:
+    """Cari threshold paling akurat berbasis forward-return backtest sederhana.
+
+    Label aktual per ticker dihitung dari hit-rate forward return historis:
+    label=1 jika >= 50% sampel window menghasilkan return >= target_return_pct.
+    """
+
+    saved_tickers = _load_saved_tickers()
+    if not saved_tickers:
+        raise HTTPException(status_code=400, detail="No saved tickers to calibrate")
+
+    cagr_items = _load_cagr_data()
+    fundamentals_df = get_stock_data(saved_tickers)
+    fundamentals = fundamentals_df.to_dict(orient="records") if fundamentals_df is not None else []
+    fund_by_ticker = {
+        str(row.get("Ticker") or "").strip(): row
+        for row in fundamentals
+        if str(row.get("Ticker") or "").strip()
+    }
+
+    label_info = {}
+    for t in saved_tickers:
+        info = _forward_label_from_price(
+            t,
+            horizon_days=int(max(payload.horizon_days, 1)),
+            target_return_pct=float(payload.target_return_pct),
+            lookback_period=str(payload.lookback_period or "5y"),
+            min_samples=int(max(payload.min_samples, 1)),
+        )
+        if info:
+            label_info[t] = info
+
+    if not label_info:
+        raise HTTPException(status_code=400, detail="No tickers have sufficient history for calibration")
+
+    # Dataset mode use_cagr=True (hanya ticker yang sudah ada CAGR)
+    cagr_results: list[CagrResult] = []
+    for t in saved_tickers:
+        if t not in label_info:
+            continue
+        raw = cagr_items.get(t) if isinstance(cagr_items.get(t), dict) else {}
+        has_direct = _has_direct_cagr(raw)
+        has_annual = _has_annual_cagr(raw)
+        if not has_direct and not has_annual:
+            continue
+
+        if has_direct:
+            cagr_net = float(raw.get("cagr_net_income"))
+            cagr_rev = float(raw.get("cagr_revenue"))
+            cagr_eps = float(raw.get("cagr_eps"))
+        else:
+            cagr_net = compute_cagr(raw.get("net_income") or [])
+            cagr_rev = compute_cagr(raw.get("revenue") or [])
+            cagr_eps = compute_cagr(raw.get("eps") or [])
+
+        fund = fund_by_ticker.get(t) or {}
+        cagr_results.append(
+            CagrResult(
+                ticker=t,
+                cagr_net_income=cagr_net,
+                cagr_revenue=cagr_rev,
+                cagr_eps=cagr_eps,
+                roe=float(fund.get("ROE (%)") or 0.0),
+                mos=float(fund.get("MOS (%)") or 0.0),
+                pbv=float(fund.get("PBV") or 0.0),
+                div_yield=float(fund.get("Dividend Yield (%)") or 0.0),
+                per=float(fund.get("PER NOW") or 0.0),
+                down_from_high=float(fund.get("Down From High 52 (%)") or 0.0),
+            )
+        )
+
+    method_names = ["SAW", "AHP", "TOPSIS", "VIKOR", "FUZZY_AHP_TOPSIS"]
+    calibrated = {}
+
+    # Kalibrasi use_cagr=True
+    for method in method_names:
+        scores = []
+        labels = []
+        for r in cagr_results:
+            out = evaluate_cagr_methods([r], use_cagr=True)
+            info = ((out.get("methods") or {}).get(method) or {}).get(r.ticker) or {}
+            sc = info.get("score")
+            if sc is None:
+                continue
+            scores.append(float(sc))
+            labels.append(int(label_info[r.ticker]["label"]))
+
+        calibrated[method] = _search_best_threshold(scores, labels)
+
+    # Kalibrasi hybrid dashboard (tanpa CAGR) untuk semua ticker berlabel
+    no_cagr_scores = []
+    no_cagr_labels = []
+    for t in saved_tickers:
+        if t not in label_info:
+            continue
+        fund = fund_by_ticker.get(t) or {}
+        r = CagrResult(
+            ticker=t,
+            cagr_net_income=0.0,
+            cagr_revenue=0.0,
+            cagr_eps=0.0,
+            roe=float(fund.get("ROE (%)") or 0.0),
+            mos=float(fund.get("MOS (%)") or 0.0),
+            pbv=float(fund.get("PBV") or 0.0),
+            div_yield=float(fund.get("Dividend Yield (%)") or 0.0),
+            per=float(fund.get("PER NOW") or 0.0),
+            down_from_high=float(fund.get("Down From High 52 (%)") or 0.0),
+        )
+        out = evaluate_cagr_methods([r], use_cagr=False)
+        info = ((out.get("methods") or {}).get("FUZZY_AHP_TOPSIS") or {}).get(t) or {}
+        sc = info.get("score")
+        if sc is None:
+            continue
+        no_cagr_scores.append(float(sc))
+        no_cagr_labels.append(int(label_info[t]["label"]))
+
+    calibrated["FUZZY_AHP_TOPSIS_NO_CAGR"] = _search_best_threshold(no_cagr_scores, no_cagr_labels)
+
+    saved_thresholds = None
+    if payload.save:
+        existing = _load_threshold_data()
+        methods_cfg = existing.get("methods") if isinstance(existing.get("methods"), dict) else {}
+
+        for method in ["SAW", "AHP", "TOPSIS", "VIKOR"]:
+            best = (calibrated.get(method) or {}).get("best") or {}
+            thr = best.get("threshold")
+            if thr is None:
+                continue
+            thr_f = float(thr)
+            methods_cfg[method] = {
+                "buy": thr_f,
+                "mos_boost_buy": max(0.0, min(1.0, thr_f - 0.08)),
+                "mos_trigger": 15.0,
+            }
+
+        hybrid_cfg = existing.get("hybrid") if isinstance(existing.get("hybrid"), dict) else {}
+
+        best_use_cagr = (calibrated.get("FUZZY_AHP_TOPSIS") or {}).get("best") or {}
+        thr_use_cagr = best_use_cagr.get("threshold")
+        if thr_use_cagr is not None:
+            thr = float(thr_use_cagr)
+            hybrid_cfg["use_cagr"] = {
+                "recommended": max(0.0, min(1.0, thr + 0.10)),
+                "buy": thr,
+                "risk": max(0.0, min(1.0, thr - 0.12)),
+            }
+
+        best_no_cagr = (calibrated.get("FUZZY_AHP_TOPSIS_NO_CAGR") or {}).get("best") or {}
+        thr_no_cagr = best_no_cagr.get("threshold")
+        if thr_no_cagr is not None:
+            thr = float(thr_no_cagr)
+            hybrid_cfg["no_cagr"] = {
+                "recommended": max(0.0, min(1.0, thr + 0.10)),
+                "buy": thr,
+                "risk": max(0.0, min(1.0, thr - 0.10)),
+            }
+
+        out = {
+            "methods": methods_cfg,
+            "hybrid": hybrid_cfg,
+            "hybrid_weights": existing.get("hybrid_weights") if isinstance(existing.get("hybrid_weights"), dict) else {},
+            "meta": {
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "horizon_days": int(payload.horizon_days),
+                "target_return_pct": float(payload.target_return_pct),
+                "lookback_period": str(payload.lookback_period),
+                "min_samples": int(payload.min_samples),
+            },
+        }
+        _save_threshold_data(out)
+        saved_thresholds = out
+
+    return {
+        "calibration_input": {
+            "saved_tickers": len(saved_tickers),
+            "labeled_tickers": len(label_info),
+            "cagr_tickers": len(cagr_results),
+            "horizon_days": int(payload.horizon_days),
+            "target_return_pct": float(payload.target_return_pct),
+            "lookback_period": str(payload.lookback_period),
+            "min_samples": int(payload.min_samples),
+        },
+        "labels": label_info,
+        "calibrated": calibrated,
+        "saved": bool(payload.save),
+        "thresholds": saved_thresholds,
     }

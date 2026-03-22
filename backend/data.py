@@ -1,8 +1,138 @@
 import yfinance as yf
 import pandas as pd
 import numpy as np
+from pathlib import Path
+import json
 
-from backend.decision_making import CagrResult, evaluate_cagr_methods
+from backend.decision_making import CagrResult, evaluate_cagr_methods, compute_cagr
+
+
+CAGR_JSON_PATH = Path(__file__).with_name("cagr_data.json")
+
+
+def _normalize_percent_value(raw_value):
+    """Normalisasi nilai rasio yfinance ke persen.
+
+    Banyak field yfinance berbentuk rasio (mis. 0.35 = 35%).
+    Untuk kasus payout > 100%, nilai bisa menjadi 1.17 (=117%).
+    Jadi rentang kecil sekitar -3..3 diperlakukan sebagai rasio dan dikali 100.
+    """
+
+    if raw_value is None:
+        return None
+    try:
+        val = float(raw_value)
+    except (TypeError, ValueError):
+        return None
+
+    if not np.isfinite(val):
+        return None
+
+    if val != 0 and abs(val) <= 3:
+        return val * 100.0
+    return val
+
+
+def _load_cagr_items() -> dict:
+    if not CAGR_JSON_PATH.exists():
+        return {}
+    try:
+        raw = json.loads(CAGR_JSON_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+    items = raw.get("items") if isinstance(raw, dict) else {}
+    if not isinstance(items, dict):
+        return {}
+
+    # Normalisasi key ke lowercase agar cocok dengan ticker dashboard.
+    out = {}
+    for k, v in items.items():
+        key = str(k or "").strip().lower()
+        if key:
+            out[key] = v if isinstance(v, dict) else {}
+    return out
+
+
+def _extract_cagr_for_ticker(ticker: str, cagr_items: dict) -> tuple[float, float, float, bool]:
+    t = str(ticker or "").strip().lower()
+    raw = cagr_items.get(t) if isinstance(cagr_items.get(t), dict) else {}
+
+    def _num(v):
+        try:
+            x = float(v)
+            return x if np.isfinite(x) else None
+        except (TypeError, ValueError):
+            return None
+
+    direct_net = _num(raw.get("cagr_net_income"))
+    direct_rev = _num(raw.get("cagr_revenue"))
+    direct_eps = _num(raw.get("cagr_eps"))
+    has_direct = direct_net is not None and direct_rev is not None and direct_eps is not None
+    if has_direct:
+        return float(direct_net), float(direct_rev), float(direct_eps), True
+
+    ni = raw.get("net_income") if isinstance(raw.get("net_income"), list) else []
+    rev = raw.get("revenue") if isinstance(raw.get("revenue"), list) else []
+    eps = raw.get("eps") if isinstance(raw.get("eps"), list) else []
+    has_annual = len(ni) >= 2 and len(rev) >= 2 and len(eps) >= 2
+    if has_annual:
+        return compute_cagr(ni), compute_cagr(rev), compute_cagr(eps), True
+
+    return 0.0, 0.0, 0.0, False
+
+
+def _estimate_dividend_growth_from_history(stock, years: int = 5):
+    """Estimasi growth dividen tahunan (%) dari histori pembayaran dividen.
+
+    Dipakai sebagai fallback saat `info['dividendGrowth']` tidak tersedia/kurang representatif.
+    """
+
+    try:
+        divs = stock.dividends
+    except Exception:
+        return None
+
+    if divs is None or len(divs) == 0:
+        return None
+
+    try:
+        # Aggregate ke total dividen per tahun
+        yearly = divs.groupby(divs.index.year).sum()
+    except Exception:
+        return None
+
+    if yearly is None or len(yearly) < 2:
+        return None
+
+    yearly = yearly.astype(float).replace([np.inf, -np.inf], np.nan).dropna()
+    yearly = yearly[yearly > 0]
+    if len(yearly) < 2:
+        return None
+
+    last_year = int(yearly.index.max())
+    start_target = last_year - int(max(years, 1))
+    window = yearly[yearly.index >= start_target]
+    if len(window) < 2:
+        window = yearly.tail(min(len(yearly), 6))
+    if len(window) < 2:
+        return None
+
+    first_year = int(window.index.min())
+    end_year = int(window.index.max())
+    span = end_year - first_year
+    if span <= 0:
+        return None
+
+    first_val = float(window.loc[first_year])
+    end_val = float(window.loc[end_year])
+    if first_val <= 0 or end_val <= 0:
+        return None
+
+    cagr = (end_val / first_val) ** (1.0 / span) - 1.0
+    if not np.isfinite(cagr):
+        return None
+    return float(cagr * 100.0)
 
 
 def _decision_engine(current_price, mos, roe, pbv, div_yield, down_from_high):
@@ -212,9 +342,9 @@ def _apply_fuzzy_ahp_topsis_buy_decision(df: pd.DataFrame) -> pd.DataFrame:
     if not all(col in df.columns for col in required_cols):
         return df
 
-    results: list[CagrResult] = []
+    cagr_items = _load_cagr_items()
 
-    for _, row in df.iterrows():
+    for idx, row in df.iterrows():
         ticker = str(row.get("Ticker") or row.get("Name") or "-")
 
         roe = float(row.get("ROE (%)") or 0.0)
@@ -223,12 +353,35 @@ def _apply_fuzzy_ahp_topsis_buy_decision(df: pd.DataFrame) -> pd.DataFrame:
         div_yield = float(row.get("Dividend Yield (%)") or 0.0)
         per = float(row.get("PER NOW") or 0.0)
 
-        results.append(
-            CagrResult(
+        # 1) Base signal dashboard: selalu no_cagr
+        base_result = CagrResult(
+            ticker=ticker,
+            cagr_net_income=0.0,
+            cagr_revenue=0.0,
+            cagr_eps=0.0,
+            roe=roe,
+            mos=mos,
+            pbv=pbv,
+            div_yield=div_yield,
+            per=per,
+            down_from_high=0.0,
+        )
+
+        base_eval = evaluate_cagr_methods([base_result], use_cagr=False)
+        base_info = ((base_eval.get("methods") or {}).get("FUZZY_AHP_TOPSIS") or {}).get(ticker) or {}
+
+        base_decision = base_info.get("decision")
+        base_score = base_info.get("score")
+        base_category = base_info.get("category")
+
+        # 2) Final signal (detail-style): pakai CAGR jika tersedia
+        cagr_net, cagr_rev, cagr_eps, has_cagr = _extract_cagr_for_ticker(ticker, cagr_items)
+        if has_cagr:
+            final_result = CagrResult(
                 ticker=ticker,
-                cagr_net_income=0.0,
-                cagr_revenue=0.0,
-                cagr_eps=0.0,
+                cagr_net_income=cagr_net,
+                cagr_revenue=cagr_rev,
+                cagr_eps=cagr_eps,
                 roe=roe,
                 mos=mos,
                 pbv=pbv,
@@ -236,30 +389,125 @@ def _apply_fuzzy_ahp_topsis_buy_decision(df: pd.DataFrame) -> pd.DataFrame:
                 per=per,
                 down_from_high=0.0,
             )
+            final_eval = evaluate_cagr_methods([final_result], use_cagr=True)
+            final_info = ((final_eval.get("methods") or {}).get("FUZZY_AHP_TOPSIS") or {}).get(ticker) or {}
+        else:
+            final_info = base_info
+
+        final_decision = final_info.get("decision")
+        final_score = final_info.get("score")
+        final_category = final_info.get("category")
+
+        if base_decision:
+            df.at[idx, "Decision Buy"] = base_decision
+            df.at[idx, "Base Decision Buy"] = base_decision
+        if base_score is not None:
+            df.at[idx, "Hybrid Score"] = float(base_score)
+            df.at[idx, "Base Hybrid Score"] = float(base_score)
+        if base_category:
+            df.at[idx, "Hybrid Category"] = str(base_category)
+            df.at[idx, "Base Hybrid Category"] = str(base_category)
+        df.at[idx, "Hybrid Mode"] = "no_cagr"
+
+        if final_decision:
+            df.at[idx, "Final Decision Buy"] = final_decision
+        if final_score is not None:
+            df.at[idx, "Final Hybrid Score"] = float(final_score)
+        if final_category:
+            df.at[idx, "Final Hybrid Category"] = str(final_category)
+        df.at[idx, "Final Hybrid Mode"] = "with_cagr" if has_cagr else "no_cagr"
+
+    return df
+
+
+def _apply_payout_ratio_safety_check(df: pd.DataFrame) -> pd.DataFrame:
+    """Safety check terakhir sebelum eksekusi beli memakai payout ratio.
+
+    Option A (dividend growth-aware):
+    - Ambil dividend growth dari yfinance.
+    - Buat payout penalty yang lebih lunak jika dividend masih tumbuh.
+    - Hindari HOLD misleading untuk kasus payout tinggi tapi dividen bertumbuh.
+    """
+
+    if df is None or len(df) == 0:
+        return df
+
+    if "Payout Ratio (%)" not in df.columns:
+        df["Payout Ratio (%)"] = np.nan
+    if "Dividend Growth (%)" not in df.columns:
+        df["Dividend Growth (%)"] = np.nan
+
+    out_decisions = []
+    out_notes = []
+    out_penalties = []
+
+    for _, row in df.iterrows():
+        raw_decision = str(row.get("Final Decision Buy") or row.get("Decision Buy") or "NO BUY").strip().upper()
+        payout_raw = row.get("Payout Ratio (%)")
+        div_growth_raw = row.get("Dividend Growth (%)")
+        payout = pd.to_numeric(payout_raw, errors="coerce")
+        div_growth = pd.to_numeric(div_growth_raw, errors="coerce")
+        has_positive_div_growth = (not pd.isna(div_growth)) and float(div_growth) > 0
+
+        if raw_decision != "BUY":
+            out_decisions.append("NO BUY")
+            out_notes.append("Final signal is NO BUY")
+            out_penalties.append(None)
+            continue
+
+        if pd.isna(payout):
+            out_decisions.append("BUY")
+            out_notes.append("Payout ratio unavailable (manual check)")
+            out_penalties.append(None)
+            continue
+
+        payout = float(payout)
+
+        if payout < 0:
+            out_decisions.append("HOLD")
+            out_notes.append("Payout ratio invalid (< 0%)")
+            out_penalties.append(0.2)
+            continue
+
+        # Opsi A: payout penalty berbasis dividend growth.
+        payout_penalty = (
+            1.0
+            if payout <= 70
+            else (
+                0.85
+                if payout <= 85
+                else (
+                    0.75
+                    if (payout <= 95 and has_positive_div_growth)
+                    else (
+                        0.50
+                        if payout <= 95
+                        else (0.60 if has_positive_div_growth else 0.20)
+                    )
+                )
+            )
         )
 
-    # Mode dashboard: belum ada input CAGR user, jadi kalibrasi hybrid
-    # memakai fundamental-only agar skor tidak tertekan oleh kolom CAGR = 0.
-    eval_result = evaluate_cagr_methods(results, use_cagr=False)
-    methods = eval_result.get("methods", {})
-    hybrid = methods.get("FUZZY_AHP_TOPSIS", {})
+        out_penalties.append(float(payout_penalty))
 
-    for idx, row in df.iterrows():
-        ticker = str(row.get("Ticker") or row.get("Name") or "-")
-        info = hybrid.get(ticker)
-        if not info:
-            continue
-        decision = info.get("decision")
-        score = info.get("score")
-        category = info.get("category")
+        if payout_penalty >= 0.55:
+            out_decisions.append("BUY")
+            if payout > 95 and has_positive_div_growth:
+                out_notes.append("Very high payout, but dividend still growing")
+            elif payout > 85:
+                out_notes.append("Elevated payout, still acceptable")
+            else:
+                out_notes.append("Payout ratio within safety range")
+        else:
+            out_decisions.append("HOLD")
+            if payout > 95:
+                out_notes.append("Payout too high and dividend not growing")
+            else:
+                out_notes.append("Payout pressure too high")
 
-        if decision:
-            df.at[idx, "Decision Buy"] = decision
-        if score is not None:
-            df.at[idx, "Hybrid Score"] = float(score)
-        if category:
-            df.at[idx, "Hybrid Category"] = str(category)
-
+    df["Execution Decision"] = out_decisions
+    df["Safety Check"] = out_notes
+    df["Payout Penalty"] = out_penalties
     return df
 
 
@@ -295,6 +543,17 @@ def get_stock_data(ticker_list):
         fcf = info.get('freeCashflow') or 0
 
         div_yield = info.get('dividendYield')
+        payout_ratio_raw = info.get('payoutRatio')
+        div_growth_raw = info.get('dividendGrowth')
+        payout_ratio = _normalize_percent_value(payout_ratio_raw)
+        div_growth = _normalize_percent_value(div_growth_raw)
+
+        # Fallback: beberapa ticker tidak mengisi `dividendGrowth` secara konsisten
+        # di `info`, jadi hitung estimasi growth dari histori dividen 5 tahun.
+        if div_growth is None or not np.isfinite(div_growth) or div_growth <= 0:
+            hist_div_growth = _estimate_dividend_growth_from_history(stock, years=5)
+            if hist_div_growth is not None and np.isfinite(hist_div_growth):
+                div_growth = float(hist_div_growth)
 
         
         # 3. Perhitungan Kustom (Kalkulasi Otomatis)
@@ -380,6 +639,8 @@ def get_stock_data(ticker_list):
             'Free Cashflow': fcf,
             'PBV': pbv,
             'Dividend Yield (%)': div_yield,
+            'Dividend Growth (%)': round(div_growth, 2) if div_growth is not None else None,
+            'Payout Ratio (%)': round(payout_ratio, 2) if payout_ratio is not None else None,
             'Decision Buy': buy_decision,
             'Decision Discount': discount_label,
             'Decision Dividend': dividend_label,
@@ -391,6 +652,7 @@ def get_stock_data(ticker_list):
 
     # Terapkan Hybrid FUZZY AHP-TOPSIS untuk keputusan BUY/NO BUY
     df = _apply_fuzzy_ahp_topsis_buy_decision(df)
+    df = _apply_payout_ratio_safety_check(df)
 
     return df
 
