@@ -9,10 +9,10 @@
   <body class="bg-slate-950 text-slate-100 antialiased">
     <main class="min-h-screen px-4 py-6">
       <div class="mx-auto max-w-screen-2xl space-y-4">
-        <header class="space-y-3">
+        <header class="space-y-3 animate-fade-in-up">
           <div class="flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between">
             <div>
-              <h1 class="text-2xl font-semibold tracking-tight text-slate-50">
+              <h1 class="text-2xl font-semibold tracking-tight gradient-text">
                 Finapp
               </h1>
               <p class="mt-1 text-sm text-slate-400">
@@ -22,39 +22,46 @@
                 by Azeroth (github : asda1-max)
               </p>
             </div>
-            <div class="text-xs text-slate-400">
+            <div class="text-xs text-slate-400 animate-fade-in-up delay-200">
               Live from
-              <span class="rounded-full bg-slate-800 px-2 py-0.5 text-[11px] font-medium text-sky-300">
+              <span class="rounded-full bg-sky-500/10 border border-sky-500/20 px-2 py-0.5 text-[11px] font-medium text-sky-300">
                 /stocks
               </span>
             </div>
           </div>
 
-          <div class="flex flex-col gap-2 rounded-2xl border border-slate-800 bg-slate-900/70 p-3 sm:flex-row sm:items-center sm:gap-3">
+          <div class="glass-card flex flex-col gap-2 rounded-2xl p-3 sm:flex-row sm:items-center sm:gap-3 animate-fade-in-up delay-200">
             <label for="ticker-input" class="text-xs text-slate-300 sm:w-40">Cari ticker spesifik</label>
             <div class="flex flex-1 items-center gap-2">
               <input
                 id="ticker-input"
                 type="text"
                 placeholder="Misal: BBCA.JK"
-                class="flex-1 rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1.5 text-xs text-slate-100 placeholder:text-slate-600 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                class="flex-1 rounded-lg border border-slate-700/50 bg-slate-950/60 px-3 py-2 text-xs text-slate-100 placeholder:text-slate-600 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 transition-all duration-200"
               />
               <button
                 id="ticker-submit"
-                class="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-medium text-slate-50 hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-slate-700"
+                class="btn-gradient rounded-lg px-4 py-2 text-xs font-medium"
               >
                 Fetch
               </button>
               <button
                 id="refresh-all-btn"
                 type="button"
-                class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-100 hover:border-sky-500 hover:text-sky-200"
+                class="rounded-lg border border-slate-700/50 bg-slate-900/60 px-3 py-2 text-xs font-medium text-slate-100 hover:border-sky-500 hover:text-sky-200 hover:bg-sky-950/30 transition-all duration-200"
               >
-                Refresh All
+                ↻ Refresh All
+              </button>
+              <button
+                id="batch-import-btn"
+                type="button"
+                class="rounded-lg border border-violet-700/50 bg-violet-950/30 px-3 py-2 text-xs font-medium text-violet-300 hover:border-violet-500 hover:text-violet-200 hover:bg-violet-950/50 transition-all duration-200"
+              >
+                📥 Batch Import
               </button>
               <select
                 id="dashboard-view-mode"
-                class="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs font-medium text-slate-100 hover:border-sky-500 focus:border-sky-500 focus:outline-none"
+                class="rounded-lg border border-slate-700/50 bg-slate-900/60 px-2 py-2 text-xs font-medium text-slate-100 hover:border-sky-500 focus:border-sky-500 focus:outline-none transition-all duration-200"
                 title="Mode tampilan dashboard"
               >
                 <option value="flat">View: Flat</option>
@@ -64,19 +71,24 @@
           </div>
         </header>
 
-        <section class="rounded-2xl border border-slate-800 bg-slate-900/70 p-3 sm:p-4">
+        <section class="glass-card rounded-2xl p-3 sm:p-4 animate-fade-in-up delay-300">
           <div id="status" class="mb-3 text-xs text-slate-400">
             Belum ada saham. Tambahkan dengan mengetik ticker di atas.
           </div>
           <div id="stocks-cards" class="grid gap-3 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"></div>
 
-          <div class="mt-5 border-t border-slate-800 pt-4">
+          <div class="mt-5 border-t border-slate-800/50 pt-4">
             <button
               id="reset-all-btn"
-              class="w-full rounded-xl border border-rose-700/60 bg-rose-950/50 px-4 py-3 text-sm font-semibold text-rose-300 hover:border-rose-500 hover:text-rose-200"
+              class="group w-full rounded-xl border border-rose-700/40 bg-rose-950/30 px-4 py-3 text-sm font-semibold text-rose-300 hover:border-rose-500 hover:text-rose-200 hover:bg-rose-950/50 transition-all duration-200"
               type="button"
             >
-              RESET SEMUA DATA
+              <span class="flex items-center justify-center gap-2">
+                <svg class="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                RESET SEMUA DATA
+              </span>
             </button>
             <p class="mt-1 text-[10px] text-slate-500">
               Akan menghapus semua ticker tersimpan dan semua input CAGR.
@@ -86,10 +98,62 @@
       </div>
     </main>
 
-    <div id="reset-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 p-4">
-      <div class="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-4 shadow-xl">
-        <h2 class="text-sm font-semibold text-slate-100">Konfirmasi Reset Semua Data</h2>
-        <p class="mt-1 text-xs text-slate-400">
+    <!-- Batch Import Modal -->
+    <div id="batch-modal" class="fixed inset-0 z-50 hidden items-center justify-center modal-backdrop p-4">
+      <div class="w-full max-w-lg glass-card rounded-2xl p-5 shadow-2xl animate-fade-in-scale">
+        <h2 class="text-sm font-semibold text-slate-100 flex items-center gap-2">
+          <span class="text-lg">📥</span>
+          Batch Import Tickers
+        </h2>
+        <p class="mt-2 text-xs text-slate-400">
+          Paste atau ketik banyak ticker sekaligus. Pisahkan dengan <span class="text-sky-300">koma</span>, <span class="text-sky-300">spasi</span>, atau <span class="text-sky-300">baris baru</span>.
+        </p>
+        <textarea
+          id="batch-textarea"
+          rows="6"
+          class="mt-3 w-full rounded-lg border border-slate-700/50 bg-slate-950/70 px-3 py-2 text-xs text-slate-100 placeholder:text-slate-600 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 transition-all font-mono"
+          placeholder="BBCA.JK, BBRI.JK, TLKM.JK&#10;ASII.JK&#10;UNVR.JK HMSP.JK"
+        ></textarea>
+        <div id="batch-preview" class="mt-2 text-[10px] text-slate-500">
+          0 ticker terdeteksi
+        </div>
+        <div id="batch-progress" class="mt-2 hidden">
+          <div class="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+            <span id="batch-progress-text">Mengimport...</span>
+            <span id="batch-progress-count">0/0</span>
+          </div>
+          <div class="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+            <div id="batch-progress-bar" class="h-full rounded-full bg-gradient-to-r from-violet-500 to-sky-500 transition-all duration-300" style="width: 0%"></div>
+          </div>
+        </div>
+        <div id="batch-result" class="mt-2 hidden text-[10px]"></div>
+
+        <div class="mt-4 flex justify-end gap-2">
+          <button
+            id="batch-cancel-btn"
+            type="button"
+            class="rounded-lg border border-slate-700/50 bg-slate-900/60 px-4 py-2 text-xs font-medium text-slate-200 hover:border-slate-500 transition-all"
+          >
+            Tutup
+          </button>
+          <button
+            id="batch-import-submit"
+            type="button"
+            class="btn-gradient rounded-lg px-5 py-2 text-xs font-semibold"
+          >
+            🚀 Import Semua
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="reset-modal" class="fixed inset-0 z-50 hidden items-center justify-center modal-backdrop p-4">
+      <div class="w-full max-w-md glass-card rounded-2xl p-5 shadow-2xl animate-fade-in-scale">
+        <h2 class="text-sm font-semibold text-slate-100 flex items-center gap-2">
+          <span class="text-lg">⚠️</span>
+          Konfirmasi Reset Semua Data
+        </h2>
+        <p class="mt-2 text-xs text-slate-400">
           Tindakan ini akan menghapus semua ticker tersimpan dan semua data CAGR.
         </p>
         <label for="reset-confirm-input" class="mt-3 block text-[11px] text-slate-300">
@@ -98,7 +162,7 @@
         <input
           id="reset-confirm-input"
           type="text"
-          class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950/70 px-2 py-1.5 text-xs text-slate-100 placeholder:text-slate-600 focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500"
+          class="mt-1 w-full rounded-lg border border-slate-700/50 bg-slate-950/70 px-3 py-2 text-xs text-slate-100 placeholder:text-slate-600 focus:border-rose-500 focus:outline-none focus:ring-1 focus:ring-rose-500 transition-all"
           placeholder="yes, i want to reset"
         />
         <p id="reset-confirm-error" class="mt-1 hidden text-[10px] text-rose-300">Konfirmasi tidak cocok.</p>
@@ -107,14 +171,14 @@
           <button
             id="reset-cancel-btn"
             type="button"
-            class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-slate-500"
+            class="rounded-lg border border-slate-700/50 bg-slate-900/60 px-4 py-2 text-xs font-medium text-slate-200 hover:border-slate-500 transition-all"
           >
             Batal
           </button>
           <button
             id="reset-confirm-btn"
             type="button"
-            class="rounded-lg border border-rose-700/60 bg-rose-950/50 px-3 py-1.5 text-xs font-semibold text-rose-300 hover:border-rose-500 hover:text-rose-200"
+            class="rounded-lg border border-rose-700/60 bg-rose-950/50 px-4 py-2 text-xs font-semibold text-rose-300 hover:border-rose-500 hover:text-rose-200 hover:bg-rose-900/40 transition-all"
           >
             Ya, Reset Sekarang
           </button>

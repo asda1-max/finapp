@@ -9,70 +9,79 @@
   <body class="bg-slate-950 text-slate-100 antialiased">
     <main class="min-h-screen px-4 py-6">
       <div class="mx-auto max-w-5xl space-y-4">
-        <header class="space-y-2">
+        <header class="space-y-2 animate-fade-in-up">
           <button
             id="back-button"
-            class="text-xs text-sky-300 hover:text-sky-200 flex items-center gap-1"
+            class="text-xs text-sky-300 hover:text-sky-200 flex items-center gap-1 group"
             type="button"
           >
-            <span>&larr;</span>
+            <span class="group-hover:-translate-x-1 transition-transform duration-200">&larr;</span>
             <span>Kembali ke dashboard</span>
           </button>
           <div>
-            <h1 class="text-2xl font-semibold tracking-tight text-slate-50">Hybrid Weight Configuration</h1>
+            <h1 class="text-2xl font-semibold tracking-tight gradient-text flex items-center gap-2">
+              <span>⚙️</span>
+              Hybrid Weight Configuration
+            </h1>
             <p class="text-sm text-slate-400">
               Ubah bobot kriteria hybrid untuk mode with CAGR dan dashboard (tanpa CAGR).
             </p>
           </div>
         </header>
 
-        <section class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 space-y-4">
+        <section class="glass-card rounded-2xl p-4 space-y-4 animate-fade-in-up delay-200">
           <div class="grid gap-4 md:grid-cols-2">
-            <div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3 space-y-2">
-              <h2 class="text-sm font-semibold text-slate-100">Mode: use_cagr</h2>
+            <div class="glass-card rounded-xl p-4 space-y-2 glow-sky animate-fade-in-up delay-200">
+              <h2 class="text-sm font-semibold text-slate-100 flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+                Mode: use_cagr
+              </h2>
               <div id="use-cagr-weights" class="space-y-1.5"></div>
               <div class="text-xs text-slate-400">
                 Total bobot: <span id="use-cagr-sum" class="font-semibold text-cyan-300">-</span>
               </div>
               <div class="grid grid-cols-3 gap-2">
                 <label class="text-[11px] text-slate-300">Recommended
-                  <input id="use-cagr-recommended" type="number" step="any" class="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-xs" />
+                  <input id="use-cagr-recommended" type="number" step="any" class="mt-1 w-full rounded-md border border-slate-700/50 bg-slate-950 px-2 py-1.5 text-xs focus:border-sky-500 focus:outline-none transition-all" />
                 </label>
                 <label class="text-[11px] text-slate-300">Buy
-                  <input id="use-cagr-buy" type="number" step="any" class="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-xs" />
+                  <input id="use-cagr-buy" type="number" step="any" class="mt-1 w-full rounded-md border border-slate-700/50 bg-slate-950 px-2 py-1.5 text-xs focus:border-sky-500 focus:outline-none transition-all" />
                 </label>
                 <label class="text-[11px] text-slate-300">Risk
-                  <input id="use-cagr-risk" type="number" step="any" class="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-xs" />
+                  <input id="use-cagr-risk" type="number" step="any" class="mt-1 w-full rounded-md border border-slate-700/50 bg-slate-950 px-2 py-1.5 text-xs focus:border-sky-500 focus:outline-none transition-all" />
                 </label>
               </div>
             </div>
 
-            <div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3 space-y-2">
-              <h2 class="text-sm font-semibold text-slate-100">Mode: no_cagr</h2>
+            <div class="glass-card rounded-xl p-4 space-y-2 glow-violet animate-fade-in-up delay-300">
+              <h2 class="text-sm font-semibold text-slate-100 flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-violet-400"></span>
+                Mode: no_cagr
+              </h2>
               <div id="no-cagr-weights" class="space-y-1.5"></div>
               <div class="text-xs text-slate-400">
                 Total bobot: <span id="no-cagr-sum" class="font-semibold text-cyan-300">-</span>
               </div>
               <div class="grid grid-cols-3 gap-2">
                 <label class="text-[11px] text-slate-300">Recommended
-                  <input id="no-cagr-recommended" type="number" step="any" class="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-xs" />
+                  <input id="no-cagr-recommended" type="number" step="any" class="mt-1 w-full rounded-md border border-slate-700/50 bg-slate-950 px-2 py-1.5 text-xs focus:border-violet-500 focus:outline-none transition-all" />
                 </label>
                 <label class="text-[11px] text-slate-300">Buy
-                  <input id="no-cagr-buy" type="number" step="any" class="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-xs" />
+                  <input id="no-cagr-buy" type="number" step="any" class="mt-1 w-full rounded-md border border-slate-700/50 bg-slate-950 px-2 py-1.5 text-xs focus:border-violet-500 focus:outline-none transition-all" />
                 </label>
                 <label class="text-[11px] text-slate-300">Risk
-                  <input id="no-cagr-risk" type="number" step="any" class="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-xs" />
+                  <input id="no-cagr-risk" type="number" step="any" class="mt-1 w-full rounded-md border border-slate-700/50 bg-slate-950 px-2 py-1.5 text-xs focus:border-violet-500 focus:outline-none transition-all" />
                 </label>
               </div>
             </div>
           </div>
 
-          <div class="flex flex-wrap items-center gap-2">
-            <button id="reset-default-btn" type="button" class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-sky-500 hover:text-sky-200">
-              Reset ke Default
+          <div class="flex flex-wrap items-center gap-2 pt-2">
+            <button id="reset-default-btn" type="button" class="rounded-lg border border-slate-700/50 bg-slate-900/60 px-4 py-2 text-xs font-medium text-slate-200 hover:border-sky-500 hover:text-sky-200 hover:bg-sky-950/30 transition-all duration-200">
+              ↺ Reset ke Default
             </button>
-            <button id="save-btn" type="button" class="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-slate-50 hover:bg-sky-500">
-              Simpan Config
+            <button id="save-btn" type="button" class="btn-gradient rounded-lg px-5 py-2 text-xs font-semibold">
+              💾 Simpan Config
             </button>
             <span id="status" class="text-xs text-slate-400">Memuat config...</span>
           </div>

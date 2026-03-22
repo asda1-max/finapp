@@ -1,1 +1,291 @@
 @import "tailwindcss";
+
+/* ============================================================
+   FINAPP — Professional Design System
+   ============================================================ */
+
+/* ---------- Keyframe Animations ---------- */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 8px 0 rgba(56, 189, 248, 0.15); }
+  50%      { box-shadow: 0 0 20px 4px rgba(56, 189, 248, 0.3); }
+}
+
+@keyframes pulseGlowEmerald {
+  0%, 100% { box-shadow: 0 0 8px 0 rgba(52, 211, 153, 0.15); }
+  50%      { box-shadow: 0 0 20px 4px rgba(52, 211, 153, 0.3); }
+}
+
+@keyframes gradientShift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes borderGlow {
+  0%, 100% { border-color: rgba(56, 189, 248, 0.2); }
+  50%      { border-color: rgba(56, 189, 248, 0.5); }
+}
+
+@keyframes spinSlow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- Custom Scrollbar ---------- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.4);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.6);
+}
+
+/* ---------- Selection ---------- */
+::selection {
+  background: rgba(56, 189, 248, 0.25);
+  color: #e2e8f0;
+}
+
+/* ---------- Global Smooth Transitions ---------- */
+button, a, input, select, textarea {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ---------- Top Gradient Accent Line ---------- */
+.gradient-accent-top {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #0ea5e9, #8b5cf6, #ec4899, #0ea5e9);
+  background-size: 300% 100%;
+  animation: gradientShift 6s ease infinite;
+  z-index: 100;
+}
+
+/* ---------- Glass Card ---------- */
+.glass-card {
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(148, 163, 184, 0.08);
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.3),
+    0 2px 4px -2px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(148, 163, 184, 0.05);
+}
+
+.glass-card:hover {
+  background: rgba(15, 23, 42, 0.75);
+  border-color: rgba(56, 189, 248, 0.2);
+  box-shadow:
+    0 8px 25px -5px rgba(0, 0, 0, 0.4),
+    0 4px 10px -3px rgba(56, 189, 248, 0.1),
+    inset 0 1px 0 rgba(148, 163, 184, 0.08);
+  transform: translateY(-1px);
+}
+
+/* ---------- Glass Panel ---------- */
+.glass-panel {
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(148, 163, 184, 0.06);
+}
+
+/* ---------- Glow Borders ---------- */
+.glow-sky    { box-shadow: 0 0 15px -3px rgba(56, 189, 248, 0.2), inset 0 0 15px -3px rgba(56, 189, 248, 0.05); }
+.glow-emerald { box-shadow: 0 0 15px -3px rgba(52, 211, 153, 0.2), inset 0 0 15px -3px rgba(52, 211, 153, 0.05); }
+.glow-rose   { box-shadow: 0 0 15px -3px rgba(251, 113, 133, 0.2), inset 0 0 15px -3px rgba(251, 113, 133, 0.05); }
+.glow-amber  { box-shadow: 0 0 15px -3px rgba(251, 191, 36, 0.2), inset 0 0 15px -3px rgba(251, 191, 36, 0.05); }
+.glow-violet { box-shadow: 0 0 15px -3px rgba(139, 92, 246, 0.2), inset 0 0 15px -3px rgba(139, 92, 246, 0.05); }
+
+/* ---------- Gradient Text ---------- */
+.gradient-text {
+  background: linear-gradient(135deg, #38bdf8, #818cf8, #c084fc);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ---------- Animated Gradient Button ---------- */
+.btn-gradient {
+  background: linear-gradient(135deg, #0ea5e9, #6366f1, #8b5cf6);
+  background-size: 200% 200%;
+  animation: gradientShift 4s ease infinite;
+  border: none;
+  color: white;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+.btn-gradient:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px -4px rgba(99, 102, 241, 0.5);
+}
+.btn-gradient:active {
+  transform: translateY(0);
+}
+
+/* ---------- Animation Utility Classes ---------- */
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.animate-fade-in-scale {
+  animation: fadeInScale 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.animate-slide-in-right {
+  animation: slideInRight 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.animate-pulse-glow {
+  animation: pulseGlow 2.5s ease-in-out infinite;
+}
+.animate-pulse-glow-emerald {
+  animation: pulseGlowEmerald 2.5s ease-in-out infinite;
+}
+.animate-count-up {
+  animation: countUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* Stagger delay helpers */
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+.delay-400 { animation-delay: 0.4s; }
+.delay-500 { animation-delay: 0.5s; }
+.delay-600 { animation-delay: 0.6s; }
+
+/* ---------- Shimmer / Loading Skeleton ---------- */
+.shimmer {
+  background: linear-gradient(90deg, rgba(30,41,59,0) 0%, rgba(51,65,85,0.3) 50%, rgba(30,41,59,0) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* ---------- Rank Badge Styles ---------- */
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+.rank-gold   { background: linear-gradient(135deg, #f59e0b, #eab308); color: #1c1917; box-shadow: 0 0 10px rgba(245, 158, 11, 0.4); }
+.rank-silver { background: linear-gradient(135deg, #94a3b8, #cbd5e1); color: #1e293b; box-shadow: 0 0 10px rgba(148, 163, 184, 0.3); }
+.rank-bronze { background: linear-gradient(135deg, #d97706, #b45309); color: #fff7ed; box-shadow: 0 0 10px rgba(217, 119, 6, 0.3); }
+
+/* ---------- Table Row Hover ---------- */
+.table-row-hover:hover {
+  background: rgba(56, 189, 248, 0.05);
+}
+.table-row-hover {
+  transition: background-color 0.15s ease;
+}
+
+/* ---------- Card Left Accent Border ---------- */
+.card-accent-buy {
+  border-left: 3px solid #34d399;
+}
+.card-accent-hold {
+  border-left: 3px solid #fbbf24;
+}
+.card-accent-nobuy {
+  border-left: 3px solid #475569;
+}
+
+/* ---------- Success Pulse (for save confirmations) ---------- */
+@keyframes successPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.4); }
+  70%  { box-shadow: 0 0 0 10px rgba(52, 211, 153, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+}
+.animate-success-pulse {
+  animation: successPulse 0.6s ease;
+}
+
+/* ---------- Modal Backdrop with Blur ---------- */
+.modal-backdrop {
+  background: rgba(2, 6, 23, 0.8);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* ---------- Badge (animated MOS, score, etc.) ---------- */
+.badge-glow {
+  position: relative;
+  overflow: hidden;
+}
+.badge-glow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+  animation: shimmer 3s infinite;
+  background-size: 200% 100%;
+}
+
+/* ---------- Divider with Gradient ---------- */
+.divider-gradient {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.15), transparent);
+  border: none;
+}
+
+/* ---------- Focus Ring Glow ---------- */
+input:focus, select:focus, textarea:focus {
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+}
+
+/* ---------- Profile Button Selected State ---------- */
+.profile-btn-selected {
+  position: relative;
+}
+.profile-btn-selected::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 2px;
+  background: linear-gradient(135deg, #0ea5e9, #8b5cf6);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}

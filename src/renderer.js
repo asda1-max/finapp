@@ -102,34 +102,43 @@ function buildCardHtml(ticker, s, options = {}) {
   const finalHybridScore = finalHybridScoreValue != null ? finalHybridScoreValue.toFixed(3) : '-';
   const hybridCategory = s['Hybrid Category'] ?? '-';
   const finalHybridCategory = s['Final Hybrid Category'] ?? hybridCategory;
+
+  // Determine accent border color based on execution decision
+  const accentClass = executionDecision === 'BUY'
+    ? 'card-accent-buy'
+    : executionDecision === 'HOLD'
+      ? 'card-accent-hold'
+      : 'card-accent-nobuy';
+
   const cagrWarningHtml = cagrReady
     ? ''
     : `
-      <div class="mt-1 rounded-md border border-amber-700/50 bg-amber-950/40 px-2 py-1 text-[10px] text-amber-300">
-        ⚠️ Warning: data CAGR belum diinput. Isi di halaman detailed untuk akurasi decision yang lebih baik.
+      <div class="mt-1.5 rounded-lg border border-amber-700/30 bg-amber-950/30 px-2.5 py-1.5 text-[10px] text-amber-300 flex items-center gap-1.5">
+        <span>⚠️</span>
+        <span>CAGR belum diinput. Isi di halaman detailed untuk akurasi lebih baik.</span>
       </div>
     `;
 
   return `
     <article
-      class="rounded-2xl border border-slate-800 bg-slate-900/80 p-3 sm:p-4 shadow-sm shadow-slate-900/70 cursor-pointer hover:border-sky-500 hover:bg-slate-900"
+      class="glass-card ${accentClass} rounded-2xl p-3 sm:p-4 cursor-pointer transition-all duration-300 hover:scale-[1.01] animate-fade-in-up"
       data-ticker="${ticker}"
     >
       <header class="mb-2 flex items-start justify-between gap-2">
         <div class="min-w-0 flex-1 pr-1">
           <h2 class="text-sm font-semibold leading-tight text-slate-50 truncate" title="${name}">${name}</h2>
-          <p class="mt-0.5 text-[10px] uppercase text-slate-500">${ticker}</p>
+          <p class="mt-0.5 text-[10px] uppercase text-slate-500 tracking-wide">${ticker}</p>
           <p class="mt-0.5 text-[10px] text-slate-500">Sector: ${sector}</p>
         </div>
-        <div class="flex shrink-0 items-center gap-1 whitespace-nowrap">
-          <span class="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-emerald-300">MOS ${mos}</span>
+        <div class="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
+          <span class="badge-glow relative rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-300">MOS ${mos}</span>
           <button
             type="button"
             data-delete-ticker="${ticker}"
-            class="rounded-md border border-rose-700/60 bg-rose-950/40 px-2 py-0.5 text-[10px] font-medium text-rose-300 hover:border-rose-500 hover:text-rose-200"
+            class="rounded-md border border-rose-700/40 bg-rose-950/30 px-2 py-0.5 text-[10px] font-medium text-rose-300 hover:border-rose-500 hover:text-rose-200 hover:bg-rose-950/50 transition-all duration-200"
             title="Hapus entry"
           >
-            Hapus
+            🗑️
           </button>
         </div>
       </header>
@@ -222,7 +231,7 @@ function buildCardHtml(ticker, s, options = {}) {
           <span class="text-slate-400">Payout Penalty</span>
           <span class="font-medium">${payoutPenalty}</span>
         </div>
-        <hr class="my-1 border-slate-800" />
+        <div class="divider-gradient my-2"></div>
         <div class="flex justify-between gap-2 text-[10px]">
           <span class="text-slate-400">Base Signal (Hybrid)</span>
           <span class="font-semibold ${buyDecision === 'BUY' ? 'text-emerald-400' : 'text-slate-400'}">${buyDecision}</span>
@@ -241,6 +250,7 @@ function buildCardHtml(ticker, s, options = {}) {
                 : 'text-slate-400'
           }">${executionDecision}</span>
         </div>
+        <div class="divider-gradient my-1.5"></div>
         <div class="flex justify-between gap-2 text-[10px]">
           <span class="text-slate-400">Base Score</span>
           <span class="font-medium text-cyan-300">${hybridScore}</span>
@@ -270,6 +280,7 @@ function buildCardHtml(ticker, s, options = {}) {
           <span class="font-medium text-amber-300">${safetyCheck}</span>
         </div>
         ${cagrWarningHtml}
+        <div class="divider-gradient my-1.5"></div>
         <div class="flex justify-between gap-2 text-[10px]">
           <span class="text-slate-400">Diskon</span>
           <span class="font-medium text-sky-300">${discountDecision}</span>
@@ -653,6 +664,139 @@ function init() {
     viewModeEl.addEventListener('change', () => {
       setDashboardViewMode(viewModeEl.value || 'flat');
       renderDashboardCards();
+    });
+  }
+
+  // ── Batch Import ──────────────────────────────────────────────
+  const batchBtn = document.getElementById('batch-import-btn');
+  const batchModal = document.getElementById('batch-modal');
+  const batchTextarea = document.getElementById('batch-textarea');
+  const batchPreview = document.getElementById('batch-preview');
+  const batchProgress = document.getElementById('batch-progress');
+  const batchProgressText = document.getElementById('batch-progress-text');
+  const batchProgressCount = document.getElementById('batch-progress-count');
+  const batchProgressBar = document.getElementById('batch-progress-bar');
+  const batchResult = document.getElementById('batch-result');
+  const batchCancelBtn = document.getElementById('batch-cancel-btn');
+  const batchSubmitBtn = document.getElementById('batch-import-submit');
+
+  function parseBatchTickers(text) {
+    return [...new Set(
+      (text || '')
+        .split(/[\s,;\n\r\t]+/)
+        .map(t => t.trim().toUpperCase())
+        .filter(t => t.length > 0)
+    )];
+  }
+
+  function openBatchModal() {
+    if (!batchModal) return;
+    batchModal.classList.remove('hidden');
+    batchModal.classList.add('flex');
+    if (batchTextarea) {
+      batchTextarea.value = '';
+      batchTextarea.disabled = false;
+      batchTextarea.focus();
+    }
+    if (batchPreview) batchPreview.textContent = '0 ticker terdeteksi';
+    if (batchProgress) batchProgress.classList.add('hidden');
+    if (batchResult) { batchResult.classList.add('hidden'); batchResult.innerHTML = ''; }
+    if (batchSubmitBtn) batchSubmitBtn.disabled = false;
+  }
+
+  function closeBatchModal() {
+    if (!batchModal) return;
+    batchModal.classList.add('hidden');
+    batchModal.classList.remove('flex');
+  }
+
+  if (batchTextarea && batchPreview) {
+    batchTextarea.addEventListener('input', () => {
+      const tickers = parseBatchTickers(batchTextarea.value);
+      const existing = tickers.filter(t => tickerCache.has(t));
+      const newOnes = tickers.filter(t => !tickerCache.has(t));
+      let text = `${tickers.length} ticker terdeteksi`;
+      if (existing.length > 0) {
+        text += ` · ${existing.length} sudah ada`;
+      }
+      if (newOnes.length > 0) {
+        text += ` · ${newOnes.length} baru`;
+      }
+      batchPreview.textContent = text;
+    });
+  }
+
+  if (batchBtn) {
+    batchBtn.addEventListener('click', openBatchModal);
+  }
+
+  if (batchCancelBtn) {
+    batchCancelBtn.addEventListener('click', closeBatchModal);
+  }
+
+  if (batchSubmitBtn) {
+    batchSubmitBtn.addEventListener('click', async () => {
+      const tickers = parseBatchTickers(batchTextarea?.value);
+      if (tickers.length === 0) {
+        if (batchPreview) batchPreview.textContent = '⚠️ Tidak ada ticker untuk diimport.';
+        return;
+      }
+
+      // Disable UI during import
+      if (batchSubmitBtn) batchSubmitBtn.disabled = true;
+      if (batchTextarea) batchTextarea.disabled = true;
+      if (batchProgress) batchProgress.classList.remove('hidden');
+      if (batchResult) { batchResult.classList.add('hidden'); batchResult.innerHTML = ''; }
+
+      let success = 0;
+      let failed = 0;
+      let skipped = 0;
+      const failedTickers = [];
+
+      for (let i = 0; i < tickers.length; i++) {
+        const t = tickers[i];
+        const pct = Math.round(((i + 1) / tickers.length) * 100);
+
+        if (batchProgressText) batchProgressText.textContent = `Memuat ${t}...`;
+        if (batchProgressCount) batchProgressCount.textContent = `${i + 1}/${tickers.length}`;
+        if (batchProgressBar) batchProgressBar.style.width = `${pct}%`;
+
+        // Skip if already loaded
+        if (tickerCache.has(t)) {
+          skipped++;
+          continue;
+        }
+
+        try {
+          await loadSingleTicker(t);
+          if (tickerCache.has(t)) {
+            success++;
+          } else {
+            failed++;
+            failedTickers.push(t);
+          }
+        } catch {
+          failed++;
+          failedTickers.push(t);
+        }
+      }
+
+      // Show results
+      if (batchProgressText) batchProgressText.textContent = 'Selesai!';
+      if (batchProgressBar) batchProgressBar.style.width = '100%';
+
+      if (batchResult) {
+        let html = '<div class="space-y-1">';
+        html += `<div class="text-emerald-300">✅ Berhasil: ${success} ticker</div>`;
+        if (skipped > 0) html += `<div class="text-sky-300">⏭️ Dilewati (sudah ada): ${skipped} ticker</div>`;
+        if (failed > 0) html += `<div class="text-rose-300">❌ Gagal: ${failed} ticker (${failedTickers.join(', ')})</div>`;
+        html += '</div>';
+        batchResult.innerHTML = html;
+        batchResult.classList.remove('hidden');
+      }
+
+      if (batchSubmitBtn) batchSubmitBtn.disabled = false;
+      if (batchTextarea) batchTextarea.disabled = false;
     });
   }
 }

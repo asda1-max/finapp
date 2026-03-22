@@ -9,29 +9,32 @@
   <body class="bg-slate-950 text-slate-100 antialiased">
     <main class="min-h-screen px-4 py-6">
       <div class="mx-auto max-w-6xl space-y-4">
-        <header class="space-y-2">
+        <header class="space-y-2 animate-fade-in-up">
           <button
             id="back-button"
-            class="text-xs text-sky-300 hover:text-sky-200 flex items-center gap-1"
+            class="text-xs text-sky-300 hover:text-sky-200 flex items-center gap-1 group"
             type="button"
           >
-            <span>&larr;</span>
+            <span class="group-hover:-translate-x-1 transition-transform duration-200">&larr;</span>
             <span>Kembali ke dashboard</span>
           </button>
           <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h1 class="text-2xl font-semibold tracking-tight text-slate-50">Ranking Saham</h1>
+              <h1 class="text-2xl font-semibold tracking-tight gradient-text flex items-center gap-2">
+                <span>🏆</span>
+                Ranking Saham
+              </h1>
               <p class="text-sm text-slate-400">Ranking dari ticker yang sudah memiliki data CAGR (annual/direct/auto).</p>
             </div>
-            <div id="summary" class="text-xs text-slate-400">Memuat data ranking...</div>
+            <div id="summary" class="text-xs text-slate-400 animate-fade-in-up delay-200">Memuat data ranking...</div>
           </div>
         </header>
 
-        <section class="rounded-2xl border border-slate-800 bg-slate-900/70 p-3 sm:p-4 space-y-3">
+        <section class="glass-card rounded-2xl p-3 sm:p-4 space-y-3 animate-fade-in-up delay-200">
           <div class="grid gap-2 sm:grid-cols-3">
             <label class="text-xs text-slate-300 flex flex-col gap-1">
               Metode Ranking
-              <select id="method-select" class="rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1.5 text-xs text-slate-100">
+              <select id="method-select" class="rounded-lg border border-slate-700/50 bg-slate-950/60 px-2 py-2 text-xs text-slate-100 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 transition-all">
                 <option value="FUZZY_AHP_TOPSIS">Hybrid • Final Decision</option>
                 <option value="TOPSIS">TOPSIS • Relative Quality Score</option>
                 <option value="SAW">SAW • Growth Score</option>
@@ -42,62 +45,65 @@
 
             <label class="text-xs text-slate-300 flex flex-col gap-1">
               Urutan Skor
-              <select id="order-select" class="rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1.5 text-xs text-slate-100">
+              <select id="order-select" class="rounded-lg border border-slate-700/50 bg-slate-950/60 px-2 py-2 text-xs text-slate-100 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 transition-all">
                 <option value="desc">Terbesar ke terkecil</option>
                 <option value="asc">Terkecil ke terbesar</option>
               </select>
             </label>
 
             <div class="text-xs text-slate-400 flex items-end">
-              <button id="refresh-btn" class="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-medium text-slate-50 hover:bg-sky-500">
-                Refresh Ranking
+              <button id="refresh-btn" class="btn-gradient rounded-lg px-4 py-2 text-xs font-medium">
+                ↻ Refresh Ranking
               </button>
             </div>
           </div>
 
-          <div class="overflow-auto rounded-xl border border-slate-800">
+          <div class="overflow-auto rounded-xl border border-slate-700/30">
             <table class="w-full min-w-300 text-[11px]">
-              <thead class="bg-slate-950/70 text-slate-400">
+              <thead class="bg-slate-950/80 text-slate-400">
                 <tr>
-                  <th class="px-2 py-2 text-left">Rank</th>
-                  <th class="px-2 py-2 text-left">Ticker</th>
-                  <th class="px-2 py-2 text-left">Nama</th>
-                  <th class="px-2 py-2 text-left">Sector</th>
-                  <th class="px-2 py-2 text-left">Mode</th>
-                  <th class="px-2 py-2 text-right">Kurun (thn)</th>
-                  <th class="px-2 py-2 text-left">Stabilitas CAGR</th>
-                  <th class="px-2 py-2 text-right">Score</th>
-                  <th class="px-2 py-2 text-left">Signal</th>
-                  <th class="px-2 py-2 text-left">Category</th>
-                  <th class="px-2 py-2 text-right">MOS%</th>
-                  <th class="px-2 py-2 text-right">Div Yield%</th>
-                  <th class="px-2 py-2 text-right">Quality Score</th>
-                  <th class="px-2 py-2 text-left">Quality Label</th>
-                  <th class="px-2 py-2 text-right">Discount Score</th>
-                  <th class="px-2 py-2 text-left">Timing Verdict</th>
-                  <th class="px-2 py-2 text-right">CAGR NI</th>
-                  <th class="px-2 py-2 text-right">CAGR EPS</th>
-                  <th class="px-2 py-2 text-right">CAGR REV</th>
+                  <th class="px-2 py-2.5 text-left font-medium">Rank</th>
+                  <th class="px-2 py-2.5 text-left font-medium">Ticker</th>
+                  <th class="px-2 py-2.5 text-left font-medium">Nama</th>
+                  <th class="px-2 py-2.5 text-left font-medium">Sector</th>
+                  <th class="px-2 py-2.5 text-left font-medium">Mode</th>
+                  <th class="px-2 py-2.5 text-right font-medium">Kurun (thn)</th>
+                  <th class="px-2 py-2.5 text-left font-medium">Stabilitas CAGR</th>
+                  <th class="px-2 py-2.5 text-right font-medium">Score</th>
+                  <th class="px-2 py-2.5 text-left font-medium">Signal</th>
+                  <th class="px-2 py-2.5 text-left font-medium">Category</th>
+                  <th class="px-2 py-2.5 text-right font-medium">MOS%</th>
+                  <th class="px-2 py-2.5 text-right font-medium">Div Yield%</th>
+                  <th class="px-2 py-2.5 text-right font-medium">Quality Score</th>
+                  <th class="px-2 py-2.5 text-left font-medium">Quality Label</th>
+                  <th class="px-2 py-2.5 text-right font-medium">Discount Score</th>
+                  <th class="px-2 py-2.5 text-left font-medium">Timing Verdict</th>
+                  <th class="px-2 py-2.5 text-right font-medium">CAGR NI</th>
+                  <th class="px-2 py-2.5 text-right font-medium">CAGR EPS</th>
+                  <th class="px-2 py-2.5 text-right font-medium">CAGR REV</th>
                 </tr>
               </thead>
-              <tbody id="ranked-body" class="divide-y divide-slate-800 text-slate-200"></tbody>
+              <tbody id="ranked-body" class="divide-y divide-slate-800/50 text-slate-200"></tbody>
             </table>
           </div>
         </section>
 
-        <section class="rounded-2xl border border-slate-800 bg-slate-900/70 p-3 sm:p-4 space-y-2">
-          <h2 class="text-sm font-semibold text-slate-100">Unranked (CAGR belum lengkap)</h2>
-          <div class="overflow-auto rounded-xl border border-slate-800">
+        <section class="glass-card rounded-2xl p-3 sm:p-4 space-y-2 animate-fade-in-up delay-400">
+          <h2 class="text-sm font-semibold text-slate-100 flex items-center gap-2">
+            <span class="text-base">📋</span>
+            Unranked (CAGR belum lengkap)
+          </h2>
+          <div class="overflow-auto rounded-xl border border-slate-700/30">
             <table class="w-full min-w-140 text-[11px]">
-              <thead class="bg-slate-950/70 text-slate-400">
+              <thead class="bg-slate-950/80 text-slate-400">
                 <tr>
-                  <th class="px-2 py-2 text-left">No</th>
-                  <th class="px-2 py-2 text-left">Ticker</th>
-                  <th class="px-2 py-2 text-left">Nama</th>
-                  <th class="px-2 py-2 text-left">Reason</th>
+                  <th class="px-2 py-2.5 text-left font-medium">No</th>
+                  <th class="px-2 py-2.5 text-left font-medium">Ticker</th>
+                  <th class="px-2 py-2.5 text-left font-medium">Nama</th>
+                  <th class="px-2 py-2.5 text-left font-medium">Reason</th>
                 </tr>
               </thead>
-              <tbody id="unranked-body" class="divide-y divide-slate-800 text-slate-200"></tbody>
+              <tbody id="unranked-body" class="divide-y divide-slate-800/50 text-slate-200"></tbody>
             </table>
           </div>
         </section>

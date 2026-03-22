@@ -96,6 +96,8 @@ function renderUnranked(items) {
 
   items.forEach((it, idx) => {
     const tr = document.createElement('tr');
+    tr.className = 'table-row-hover animate-fade-in-up';
+    tr.style.animationDelay = `${Math.min(idx * 0.04, 0.6)}s`;
     tr.innerHTML = `
       <td class="px-2 py-2">${idx + 1}</td>
       <td class="px-2 py-2 font-medium">${it.ticker || '-'}</td>
@@ -148,11 +150,26 @@ function renderRanked(payload) {
             : 'text-slate-400';
       const category = method === 'FUZZY_AHP_TOPSIS' ? scoreObj.category || '-' : '-';
       const tickerLabel = `${it.ticker || '-'}${reliability.asterisk ? ' *' : ''}`;
+
+      // Rank badge styling for top 3
+      const rank = idx + 1;
+      let rankHtml;
+      if (rank === 1) {
+        rankHtml = `<span class="rank-badge rank-gold">1</span>`;
+      } else if (rank === 2) {
+        rankHtml = `<span class="rank-badge rank-silver">2</span>`;
+      } else if (rank === 3) {
+        rankHtml = `<span class="rank-badge rank-bronze">3</span>`;
+      } else {
+        rankHtml = `<span class="text-slate-400">${rank}</span>`;
+      }
+
       const tr = document.createElement('tr');
-      tr.className = 'cursor-pointer hover:bg-slate-800/40';
+      tr.className = 'cursor-pointer table-row-hover animate-fade-in-up';
+      tr.style.animationDelay = `${Math.min(idx * 0.04, 0.8)}s`;
       tr.setAttribute('data-ticker', it.ticker || '');
       tr.innerHTML = `
-        <td class="px-2 py-2">${idx + 1}</td>
+        <td class="px-2 py-2">${rankHtml}</td>
         <td class="px-2 py-2 font-medium">${tickerLabel}</td>
         <td class="px-2 py-2">${it.name || '-'}</td>
         <td class="px-2 py-2 text-slate-300">${it.sector || '-'}</td>
