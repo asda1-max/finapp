@@ -161,6 +161,21 @@ async function calculateAllocation() {
       blacklisted_tickers: blacklistedTickers,
     };
 
+    // Save config to localStorage
+    const savedConfig = {
+      profile: selectedProfile,
+      totalCapital: totalCapital,
+      customBluechip: document.getElementById('custom-bluechip')?.value || '40',
+      customDividend: document.getElementById('custom-dividend')?.value || '35',
+      customExperimental: document.getElementById('custom-experimental')?.value || '25',
+      customCash: document.getElementById('custom-cash')?.value || '10',
+      preferred: prefVal,
+      blacklisted: blkVal
+    };
+    try {
+      window.localStorage.setItem('risk-mgmt-config', JSON.stringify(savedConfig));
+    } catch(e) {}
+
     // Add custom fields if custom profile
     if (selectedProfile === 'custom') {
       body.custom_bluechip_pct = parseFloat(document.getElementById('custom-bluechip')?.value || '0');
@@ -296,6 +311,27 @@ function init() {
 
   // Default selection
   selectProfile('balanced');
+
+  // Restore saved config
+  try {
+    const savedStr = window.localStorage.getItem('risk-mgmt-config');
+    if (savedStr) {
+      const savedConfig = JSON.parse(savedStr);
+      if (savedConfig.profile) selectProfile(savedConfig.profile);
+      
+      const setVal = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+      
+      setVal('capital-input', savedConfig.totalCapital);
+      setVal('preferred-input', savedConfig.preferred);
+      setVal('blacklisted-input', savedConfig.blacklisted);
+      setVal('custom-bluechip', savedConfig.customBluechip);
+      setVal('custom-dividend', savedConfig.customDividend);
+      setVal('custom-experimental', savedConfig.customExperimental);
+      setVal('custom-cash', savedConfig.customCash);
+      
+      if (savedConfig.profile === 'custom') updateCustomSum();
+    }
+  } catch(e) {}
 }
 
 if (document.readyState === 'loading') {

@@ -898,6 +898,35 @@
       "period_label": "2021-2024",
       "period_source": "auto_annual_report",
       "input_mode": "auto"
+    },
+    "rals.jk": {
+      "net_income": [
+        166161000000.0,
+        351998000000.0,
+        300363000000.0,
+        314055000000.0
+      ],
+      "revenue": [
+        2592682000000.0,
+        2996613000000.0,
+        2744427000000.0,
+        2760507000000.0
+      ],
+      "eps": [
+        25.44,
+        56.17,
+        49.3,
+        52.9
+      ],
+      "cagr_net_income": 23.639964479572374,
+      "cagr_revenue": 2.1127251687557136,
+      "cagr_eps": 27.637862223470332,
+      "cagr_years": 4,
+      "period_start_year": 2021,
+      "period_end_year": 2024,
+      "period_label": "2021-2024",
+      "period_source": "auto_annual_report",
+      "input_mode": "auto"
     }
   }
 }
