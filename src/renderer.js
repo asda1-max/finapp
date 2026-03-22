@@ -5,6 +5,7 @@ initNavbar();
 const searchedTickers = new Set();
 const tickerCache = new Map();
 const DASHBOARD_VIEW_MODE_KEY = 'dashboard-view-mode';
+const CACHE_KEY = 'renderer-ticker-cache';
 
 function updateTickerJson() {
   // panel JSON sudah dihapus dari UI, fungsi dibiarkan no-op untuk kompatibilitas.
@@ -496,6 +497,9 @@ async function loadSavedTickers() {
     }
 
     renderDashboardCards();
+    try {
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify(Array.from(tickerCache.entries())));
+    } catch(e) {}
     statusEl.textContent = `Menampilkan ${tickerCache.size} saham dari data.json.`;
   } catch (error) {
     statusEl.textContent = `Gagal memuat saham tersimpan: ${String(error)}`;
@@ -606,7 +610,12 @@ async function loadSingleTicker(tickerRaw, options = {}) {
     if (useTerminal) appendTerminalLog(`SUCCESS : ${ticker} data loaded & integrated.`, 'success');
 
     // In silent/parallel mode the caller does a single final render; skip intermediate renders.
-    if (!silent) renderDashboardCards();
+    if (!silent) {
+      renderDashboardCards();
+      try {
+        sessionStorage.setItem(CACHE_KEY, JSON.stringify(Array.from(tickerCache.entries())));
+      } catch(e) {}
+    }
 
     if (!skipSave) {
       searchedTickers.add(ticker);
@@ -631,7 +640,22 @@ async function loadSingleTicker(tickerRaw, options = {}) {
 }
 
 function init() {
-  loadSavedTickers();
+  const cached = sessionStorage.getItem(CACHE_KEY);
+  if (cached && !sessionStorage.getItem('force-refresh')) {
+    try {
+      const parsed = JSON.parse(cached);
+      tickerCache.clear();
+      parsed.forEach(p => tickerCache.set(p[0], p[1]));
+      renderDashboardCards();
+      const statusEl = document.getElementById('status');
+      if (statusEl) statusEl.textContent = `Menampilkan ${tickerCache.size} saham (Cached). Klik Refresh untuk update.`;
+    } catch(e) {
+      loadSavedTickers();
+    }
+  } else {
+    sessionStorage.removeItem('force-refresh');
+    loadSavedTickers();
+  }
 
   const input = document.getElementById('ticker-input');
   const button = document.getElementById('ticker-submit');
@@ -765,6 +789,9 @@ function init() {
             if (article) article.remove();
             tickerCache.delete(t);
             renderDashboardCards();
+            try {
+              sessionStorage.setItem(CACHE_KEY, JSON.stringify(Array.from(tickerCache.entries())));
+            } catch(e) {}
             searchedTickers.delete(t);
             updateTickerJson();
 

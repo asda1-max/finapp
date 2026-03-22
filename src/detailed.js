@@ -996,6 +996,10 @@ function init() {
           return;
         }
         if (statusEl) statusEl.textContent = `Entry ${t} berhasil dihapus. Kembali ke dashboard...`;
+        
+        // Force main dashboard to reload instead of using cache
+        sessionStorage.setItem('force-refresh', 'true');
+
         setTimeout(() => {
           window.location.href = 'index.html';
         }, 600);
@@ -1056,6 +1060,22 @@ function init() {
     // Ambil histori harga (default: harian, 3 bulan terakhir)
     loadPriceHistory(t, '1d');
     loadPerformanceOverview(t);
+
+    // Auto-refresh interval (every 60 seconds)
+    setInterval(() => {
+      fetch(`http://127.0.0.1:8000/stocks?tickers=${encodeURIComponent(t)}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((json) => {
+          if (Array.isArray(json) && json.length > 0 && !isLikelyInvalidTicker(json[0], t)) {
+            renderFundamentals(t, json[0]);
+          }
+        })
+        .catch(() => {});
+        
+      const intervalSelect = document.getElementById('price-interval');
+      const val = intervalSelect ? (intervalSelect.value || '1d') : '1d';
+      loadPriceHistory(t, val);
+    }, 60000);
 
     fetch(`http://127.0.0.1:8000/cagr-raw/${encodeURIComponent(t)}`)
       .then((res) => (res.ok ? res.json() : null))
