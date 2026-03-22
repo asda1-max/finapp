@@ -129,7 +129,7 @@ function renderRanked(payload) {
   if (ranked.length === 0) {
     body.innerHTML = `
       <tr>
-        <td colspan="17" class="px-2 py-3 text-center text-slate-400">Belum ada ticker yang bisa diranking. Isi CAGR dulu di detailed page.</td>
+        <td colspan="19" class="px-2 py-3 text-center text-slate-400">Belum ada ticker yang bisa diranking. Isi CAGR dulu di detailed page.</td>
       </tr>
     `;
   } else {
@@ -164,6 +164,8 @@ function renderRanked(payload) {
         <td class="px-2 py-2 text-right">${formatPercent(it?.div_yield_pct)}</td>
         <td class="px-2 py-2 text-right text-cyan-300">${formatScore(it?.quality_score)}</td>
         <td class="px-2 py-2 text-emerald-300">${it?.quality_label || '-'}</td>
+        <td class="px-2 py-2 text-right text-cyan-300">${formatScore(it?.discount_score)}</td>
+        <td class="px-2 py-2 text-amber-300">${it?.timing_verdict || '-'}</td>
         <td class="px-2 py-2 text-right">${formatPercent(it?.cagr?.net_income)}</td>
         <td class="px-2 py-2 text-right">${formatPercent(it?.cagr?.eps)}</td>
         <td class="px-2 py-2 text-right">${formatPercent(it?.cagr?.revenue)}</td>

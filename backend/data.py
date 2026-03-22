@@ -211,6 +211,44 @@ def _apply_quality_verdict(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _apply_discount_timing_verdict(df: pd.DataFrame) -> pd.DataFrame:
+    """Tambahkan verdict timing berbasis Hybrid + Discount + Quality.
+
+    Prinsip:
+    - Discount score tidak berdiri sendiri.
+    - Wajib dibaca bersama sinyal hybrid dan quality score.
+    """
+
+    if df is None or len(df) == 0:
+        return df
+
+    verdicts = []
+    for _, row in df.iterrows():
+        final_dec = str(row.get("Final Decision Buy") or row.get("Decision Buy") or "NO BUY").strip().upper()
+        execution_dec = str(row.get("Execution Decision") or final_dec).strip().upper()
+        dscore = pd.to_numeric(row.get("Discount Score"), errors="coerce")
+        qscore = pd.to_numeric(row.get("Quality Score"), errors="coerce")
+
+        dscore = float(dscore) if not pd.isna(dscore) else 0.0
+        qscore = float(qscore) if not pd.isna(qscore) else 0.0
+
+        if final_dec != "BUY":
+            verdict = "NO BUY - ikut hybrid signal"
+        elif execution_dec == "HOLD":
+            verdict = "BUY signal ada, tapi HOLD oleh safety check"
+        elif qscore < 0.5 and dscore >= 0.35:
+            verdict = "Discount tinggi, tapi quality lemah (hindari value trap)"
+        elif dscore >= 0.35:
+            verdict = "BUY - timing bagus"
+        else:
+            verdict = "BUY - tapi tunggu koreksi lebih dalam"
+
+        verdicts.append(verdict)
+
+    df["Discount Timing Verdict"] = verdicts
+    return df
+
+
 def _load_cagr_items() -> dict:
     if not CAGR_JSON_PATH.exists():
         return {}
@@ -348,7 +386,58 @@ def _estimate_pbv_mean_3y_from_history(stock, bvp_per_share: float):
     return float(pbv_series.mean())
 
 
-def _decision_engine(current_price, mos, roe, pbv, div_yield, down_from_high):
+def _compute_discount_score(
+    down_from_high: float,
+    rise_from_low: float,
+    down_from_month: float,
+    down_from_week: float,
+    down_from_today: float,
+) -> float:
+    """Hitung discount score (0..1) dengan 5 metrik (value + momentum + noise)."""
+
+    n_high52 = min(max(float(down_from_high or 0.0), 0.0) / 40.0, 1.0)
+    n_low52 = max(0.0, 1.0 - (max(float(rise_from_low or 0.0), 0.0) / 50.0))
+    n_month = min(max(float(down_from_month or 0.0), 0.0) / 10.0, 1.0)
+    n_week = min(max(float(down_from_week or 0.0), 0.0) / 5.0, 1.0)
+    n_today = min(max(float(down_from_today or 0.0), 0.0) / 2.0, 1.0)
+
+    score = (
+        (0.40 * n_high52)
+        + (0.20 * n_low52)
+        + (0.20 * n_month)
+        + (0.15 * n_week)
+        + (0.05 * n_today)
+    )
+    return float(max(0.0, min(score, 1.0)))
+
+
+def _discount_label_from_score(discount_score: float) -> str:
+    s = float(discount_score or 0.0)
+    if s > 0.70:
+        return "Diskon Sangat Tinggi"
+    if s >= 0.50:
+        return "Diskon Tinggi"
+    if s >= 0.35:
+        return "Diskon Sedang"
+    if s >= 0.20:
+        return "Diskon Oke"
+    if s >= 0.10:
+        return "Diskon Kecil"
+    return "Tidak Diskon"
+
+
+def _decision_engine(
+    current_price,
+    mos,
+    roe,
+    pbv,
+    div_yield,
+    down_from_high,
+    rise_from_low,
+    down_from_month,
+    down_from_week,
+    down_from_today,
+):
     """Mesin keputusan untuk label diskon & dividen.
 
     VIKOR untuk keputusan BUY/NO BUY akan diterapkan
@@ -356,7 +445,8 @@ def _decision_engine(current_price, mos, roe, pbv, div_yield, down_from_high):
 
     Output:
     - buy_decision: placeholder (akan dioverride VIKOR jika memungkinkan)
-    - discount_label: "Diskon Tinggi" / dst
+    - discount_label: "Diskon Tinggi" / dst (berbasis discount score 5 metrik)
+    - discount_score: skor diskon 0..1
     - dividend_label: "Dividen Tinggi" / dst
     """
 
@@ -366,19 +456,15 @@ def _decision_engine(current_price, mos, roe, pbv, div_yield, down_from_high):
     div_yield = float(div_yield or 0) * 100 if 0 < float(div_yield or 0) < 1 else float(div_yield or 0 or 0)
     down_from_high = float(down_from_high or 0)
 
-    # 1) Diskon berdasarkan seberapa jauh dari HIGH 52
-    if down_from_high >= 40:
-        discount_label = "Diskon Sangat Tinggi"
-    elif down_from_high >= 30:
-        discount_label = "Diskon Tinggi"
-    elif down_from_high >= 20:
-        discount_label = "Diskon Sedang"
-    elif down_from_high >= 10:
-        discount_label = "Diskon Oke"
-    elif down_from_high >= 5:
-        discount_label = "Diskon Kecil"
-    else:
-        discount_label = "Tidak Diskon"
+    # 1) Discount score advanced (value + momentum + noise)
+    discount_score = _compute_discount_score(
+        down_from_high=down_from_high,
+        rise_from_low=rise_from_low,
+        down_from_month=down_from_month,
+        down_from_week=down_from_week,
+        down_from_today=down_from_today,
+    )
+    discount_label = _discount_label_from_score(discount_score)
 
     # 2) Dividen
     if div_yield <= 0:
@@ -420,7 +506,7 @@ def _decision_engine(current_price, mos, roe, pbv, div_yield, down_from_high):
 
     buy_decision = "BUY" if score >= 6 else "NO BUY"
 
-    return buy_decision, discount_label, dividend_label
+    return buy_decision, discount_label, discount_score, dividend_label
 
 
 def _apply_vikor_buy_decision(df: pd.DataFrame) -> pd.DataFrame:
@@ -857,13 +943,17 @@ def get_stock_data(ticker_list):
             down_from_today = ((day_anchor - current_price) / day_anchor) * 100
 
         # 4. Mesin Keputusan (BUY / Diskon / Dividen)
-        buy_decision, discount_label, dividend_label = _decision_engine(
+        buy_decision, discount_label, discount_score, dividend_label = _decision_engine(
             current_price=current_price,
             mos=mos,
             roe=roe,
             pbv=pbv,
             div_yield=div_yield,
             down_from_high=down_from_high,
+            rise_from_low=rise_from_low,
+            down_from_month=down_from_month_high,
+            down_from_week=down_from_week_high,
+            down_from_today=down_from_today,
         )
 
         # Menyusun data ke dalam dictionary
@@ -904,6 +994,7 @@ def get_stock_data(ticker_list):
             'Payout Ratio (%)': round(payout_ratio, 2) if payout_ratio is not None else None,
             'Decision Buy': buy_decision,
             'Decision Discount': discount_label,
+            'Discount Score': round(float(discount_score), 3),
             'Decision Dividend': dividend_label,
             
         }
@@ -915,6 +1006,7 @@ def get_stock_data(ticker_list):
     df = _apply_fuzzy_ahp_topsis_buy_decision(df)
     df = _apply_payout_ratio_safety_check(df)
     df = _apply_quality_verdict(df)
+    df = _apply_discount_timing_verdict(df)
 
     return df
 

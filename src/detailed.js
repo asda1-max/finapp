@@ -144,6 +144,8 @@ function renderFundamentals(ticker, stock) {
   const payoutPenaltyEl = document.getElementById('fund-payout-penalty');
   const execEl = document.getElementById('fund-exec');
   const safetyEl = document.getElementById('fund-safety');
+  const discountScoreEl = document.getElementById('fund-discount-score');
+  const timingVerdictEl = document.getElementById('fund-timing-verdict');
   const qualityScoreEl = document.getElementById('fund-quality-score');
   const qualityLabelEl = document.getElementById('fund-quality-label');
   const qualityVerdictEl = document.getElementById('fund-quality-verdict');
@@ -176,6 +178,11 @@ function renderFundamentals(ticker, stock) {
       : Number(stock['Payout Penalty']).toFixed(2);
   const executionDecision = stock['Execution Decision'] ?? '-';
   const safetyCheck = stock['Safety Check'] ?? '-';
+  const discountScore =
+    stock['Discount Score'] == null || Number.isNaN(Number(stock['Discount Score']))
+      ? '-'
+      : Number(stock['Discount Score']).toFixed(3);
+  const timingVerdict = stock['Discount Timing Verdict'] ?? '-';
   const qualityScore =
     typeof stock['Quality Score'] === 'number' ? stock['Quality Score'].toFixed(3) : '-';
   const qualityLabel = stock['Quality Label'] ?? '-';
@@ -207,6 +214,8 @@ function renderFundamentals(ticker, stock) {
   if (payoutPenaltyEl) payoutPenaltyEl.textContent = payoutPenalty;
   if (execEl) execEl.textContent = executionDecision;
   if (safetyEl) safetyEl.textContent = safetyCheck;
+  if (discountScoreEl) discountScoreEl.textContent = discountScore;
+  if (timingVerdictEl) timingVerdictEl.textContent = timingVerdict;
   if (qualityScoreEl) qualityScoreEl.textContent = qualityScore;
   if (qualityLabelEl) qualityLabelEl.textContent = qualityLabel;
   if (qualityVerdictEl) qualityVerdictEl.textContent = qualityVerdict;

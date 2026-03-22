@@ -1301,6 +1301,8 @@ async def get_ranking_data() -> dict:
             "div_yield_pct": float(fund.get("Dividend Yield (%)") or 0.0),
             "quality_score": fund.get("Quality Score"),
             "quality_label": str(fund.get("Quality Label") or "-"),
+            "discount_score": fund.get("Discount Score"),
+            "timing_verdict": str(fund.get("Discount Timing Verdict") or "-"),
             "cagr_all_zero": bool(abs(cagr_net) <= 1e-9 and abs(cagr_rev) <= 1e-9 and abs(cagr_eps) <= 1e-9),
         }
 
@@ -1360,6 +1362,8 @@ async def get_ranking_data() -> dict:
                 "div_yield_pct": meta.get("div_yield_pct"),
                 "quality_score": meta.get("quality_score"),
                 "quality_label": meta.get("quality_label") or "-",
+                "discount_score": meta.get("discount_score"),
+                "timing_verdict": meta.get("timing_verdict") or "-",
                 "cagr_reliability": cagr_reliability,
                 "cagr_all_zero": bool(meta.get("cagr_all_zero")),
                 "scores": scores,

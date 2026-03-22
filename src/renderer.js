@@ -83,6 +83,11 @@ function buildCardHtml(ticker, s, options = {}) {
   const executionDecision = s['Execution Decision'] ?? buyDecision;
   const safetyCheck = s['Safety Check'] ?? '-';
   const discountDecision = s['Decision Discount'] ?? '-';
+  const discountScore =
+    s['Discount Score'] == null || Number.isNaN(Number(s['Discount Score']))
+      ? '-'
+      : Number(s['Discount Score']).toFixed(3);
+  const discountTimingVerdict = s['Discount Timing Verdict'] ?? '-';
   const dividendDecision = s['Decision Dividend'] ?? '-';
   const qualityScoreVal = typeof s['Quality Score'] === 'number' ? s['Quality Score'] : null;
   const qualityScore = qualityScoreVal != null ? qualityScoreVal.toFixed(3) : '-';
@@ -268,6 +273,14 @@ function buildCardHtml(ticker, s, options = {}) {
           <span class="font-medium text-sky-300">${discountDecision}</span>
         </div>
         <div class="flex justify-between gap-2 text-[10px]">
+          <span class="text-slate-400">Discount Score</span>
+          <span class="font-medium text-cyan-300">${discountScore}</span>
+        </div>
+        <div class="flex justify-between gap-2 text-[10px]">
+          <span class="text-slate-400">Timing Verdict</span>
+          <span class="font-medium text-amber-300 text-right">${discountTimingVerdict}</span>
+        </div>
+        <div class="flex justify-between gap-2 text-[10px]">
           <span class="text-slate-400">Dividen</span>
           <span class="font-medium text-amber-300">${dividendDecision}</span>
         </div>
@@ -327,22 +340,30 @@ function renderDashboardCards() {
   }
 
   const sectors = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b));
-  for (const sector of sectors) {
+  for (let i = 0; i < sectors.length; i += 1) {
+    const sector = sectors[i];
     const wrapper = document.createElement('section');
-    wrapper.className = 'col-span-full space-y-2';
+    wrapper.className = `col-span-full space-y-3 ${i > 0 ? 'mt-6' : ''}`;
 
     const title = document.createElement('h3');
-    title.className = 'text-xs font-semibold uppercase tracking-wide text-sky-300';
+    title.className = 'text-center text-xs font-semibold uppercase tracking-wide text-sky-300';
     title.textContent = `-- ${sector} --`;
     wrapper.appendChild(title);
 
     const grid = document.createElement('div');
-    grid.className = 'grid gap-3 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
+    grid.className = 'mx-auto grid justify-items-center gap-3 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
 
     const rows = groups.get(sector) || [];
     for (const row of rows) {
       const html = buildCardHtml(row.ticker, row.payload.stock, { cagrReady: row.payload.cagrReady });
-      grid.insertAdjacentHTML('beforeend', html);
+      const cardWrap = document.createElement('div');
+      cardWrap.className = 'w-full max-w-sm';
+      cardWrap.innerHTML = html.trim();
+      const article = cardWrap.querySelector('article');
+      if (article) {
+        article.classList.add('w-full');
+      }
+      grid.appendChild(cardWrap);
     }
 
     wrapper.appendChild(grid);
