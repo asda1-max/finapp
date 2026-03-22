@@ -90,3 +90,13 @@ typings/
 
 # Electron-Forge
 out/
+
+# Python & Backend Build Artifacts
+backend/__pycache__/
+*.pyc
+*.spec
+
+# Compiled Executables
+dist/
+build/
+*.exe

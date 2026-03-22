@@ -7,9 +7,16 @@ import json
 import threading
 
 import numpy as np
+import os
 
 
-THRESHOLDS_JSON_PATH = Path(__file__).with_name("thresholds.json")
+_data_dir_env = os.environ.get("FINAPP_DATA_DIR")
+if _data_dir_env:
+    _data_dir = Path(_data_dir_env)
+    _data_dir.mkdir(parents=True, exist_ok=True)
+    THRESHOLDS_JSON_PATH = _data_dir / "thresholds.json"
+else:
+    THRESHOLDS_JSON_PATH = Path(__file__).with_name("thresholds.json")
 
 # ---------------------------------------------------------------------------
 # Thresholds cache — avoids re-reading thresholds.json on every scoring call.

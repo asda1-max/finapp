@@ -1,5 +1,7 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 import started from 'electron-squirrel-startup';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -36,7 +38,31 @@ const createWindow = () => {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
+let backendProcess = null;
+
 app.whenReady().then(() => {
+  if (app.isPackaged) {
+    const backendPath = path.join(process.resourcesPath, 'finapp-backend.exe');
+    const dataDir = path.join(app.getPath('userData'), 'PythonBackendData');
+    
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+
+    console.log('[Main] Spawning backend from:', backendPath);
+    console.log('[Main] FINAPP_DATA_DIR:', dataDir);
+
+    backendProcess = spawn(backendPath, [], {
+      env: {
+        ...process.env,
+        FINAPP_DATA_DIR: dataDir
+      }
+    });
+
+    backendProcess.stdout.on('data', (data) => console.log(`[Backend]: ${data.toString()}`));
+    backendProcess.stderr.on('data', (data) => console.error(`[Backend ERR]: ${data.toString()}`));
+  }
+
   createWindow();
 
   // On OS X it's common to re-create a window in the app when the
@@ -54,6 +80,12 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
+  }
+});
+
+app.on('before-quit', () => {
+  if (backendProcess) {
+    backendProcess.kill();
   }
 });
 

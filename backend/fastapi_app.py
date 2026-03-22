@@ -32,9 +32,19 @@ app.add_middleware(
 )
 
 
-DATA_JSON_PATH = Path(__file__).with_name("data.json")
-CAGR_JSON_PATH = Path(__file__).with_name("cagr_data.json")
-THRESHOLDS_JSON_PATH = Path(__file__).with_name("thresholds.json")
+import os
+
+_data_dir_env = os.environ.get("FINAPP_DATA_DIR")
+if _data_dir_env:
+    _data_dir = Path(_data_dir_env)
+    _data_dir.mkdir(parents=True, exist_ok=True)
+    DATA_JSON_PATH = _data_dir / "data.json"
+    CAGR_JSON_PATH = _data_dir / "cagr_data.json"
+    THRESHOLDS_JSON_PATH = _data_dir / "thresholds.json"
+else:
+    DATA_JSON_PATH = Path(__file__).with_name("data.json")
+    CAGR_JSON_PATH = Path(__file__).with_name("cagr_data.json")
+    THRESHOLDS_JSON_PATH = Path(__file__).with_name("thresholds.json")
 
 
 class TickerPayload(BaseModel):
