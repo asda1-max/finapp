@@ -67,6 +67,14 @@
                 Glossary
               </a>
               <select
+                id="dashboard-display-mode"
+                class="rounded-lg border border-slate-700/50 bg-slate-900/60 px-2 py-2 text-xs font-medium text-slate-100 hover:border-sky-500 focus:border-sky-500 focus:outline-none transition-all duration-200"
+                title="Tampilan data (Lite/Full)"
+              >
+                <option value="lite">Mode: Lite</option>
+                <option value="full">Mode: Full Details</option>
+              </select>
+              <select
                 id="dashboard-view-mode"
                 class="rounded-lg border border-slate-700/50 bg-slate-900/60 px-2 py-2 text-xs font-medium text-slate-100 hover:border-sky-500 focus:border-sky-500 focus:outline-none transition-all duration-200"
                 title="Mode tampilan dashboard"
@@ -105,7 +113,10 @@
           </div>
         </div>
 
-        <div id="stocks-cards" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 animate-fade-in-up delay-300">
+        <div 
+          id="stocks-cards" 
+          class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mt-6 animate-fade-in-up delay-300"
+        >
           <!-- Cards injected by renderer.js -->
         </div>
           <div class="mt-5 border-t border-slate-800/50 pt-4">

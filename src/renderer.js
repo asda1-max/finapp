@@ -6,7 +6,10 @@ initNavbar();
 const searchedTickers = new Set();
 const tickerCache = new Map();
 const DASHBOARD_VIEW_MODE_KEY = 'dashboard-view-mode';
+const DASHBOARD_DISPLAY_MODE_KEY = 'dashboard-display-mode';
 const CACHE_KEY = 'renderer-ticker-cache';
+
+let dashboardDisplayMode = localStorage.getItem(DASHBOARD_DISPLAY_MODE_KEY) || 'lite';
 
 function updateTickerJson() {
   // panel JSON sudah dihapus dari UI, fungsi dibiarkan no-op untuk kompatibilitas.
@@ -101,7 +104,117 @@ function isNegative(val) {
   return clean.startsWith('-') && !clean.startsWith('-0.00');
 }
 
-export function buildCardHtml(ticker, s) {
+function buildFullCardHtml(ticker, stock) {
+  const s = stock;
+  const name = s['Name'] ?? ticker;
+  const sector = s['Sector'] ?? 'Unknown Sector';
+  const price = formatNumber(s['Price']);
+  const roe = formatPercent(s['ROE (%)']);
+  const mos = formatPercent(s['MOS (%)']);
+  const pbv = formatNumber(s['PBV']);
+  const divYield = formatPercent(s['Dividend Yield (%)']);
+  const divGrowth = formatPercent(s['Dividend Growth (%)']);
+  const payoutRatio = formatPercent(s['Payout Ratio (%)']);
+  
+  const downFromHigh = formatPercent(s['Down From High 52 (%)']);
+  const downFromMonth = formatPercent(s['Down From This Month (%)']);
+  const downFromWeek = formatPercent(s['Down From This Week (%)']);
+  const downFromToday = formatPercent(s['Down From Today (%)']);
+  const riseFromLow = formatPercent(s['Rise From Low 52 (%)']);
+  
+  const revenue = formatNumber(s['Revenue Annual (Prev)']);
+  const epsNow = formatNumber(s['EPS NOW']);
+  const perNow = formatNumber(s['PER NOW']);
+  const high52 = formatNumber(s['HIGH 52']);
+  const low52 = formatNumber(s['LOW 52']);
+  const shares = formatNumber(s['Shares']);
+  const marketCap = formatNumber(s['Market Cap']);
+  const bvpPerS = formatNumber(s['BVP Per S']);
+  const graham = formatNumber(s['Graham Number']);
+  const payoutPenalty = s['Payout Penalty']?.toFixed(2) ?? '0.00';
+  
+  const buyDecision = s['Buy Decision'] ?? 'NO BUY';
+  const executionDecision = s['Execution Decision'] ?? '-';
+  const safetyCheck = s['Safety Check'] ?? '-';
+  const hybridScore = s['Hybrid Score']?.toFixed(3) ?? '-';
+  const finalHybridScore = s['Final Hybrid Score']?.toFixed(3) ?? '-';
+  const finalHybridCategory = s['Final Hybrid Category'] ?? '-';
+  const finalMode = s['Final Mode'] ?? '-';
+  const cagrApplied = s['CAGR Applied'] ?? 'No';
+
+  const mosClass = isNegative(mos) ? 'text-negative font-bold' : 'text-emerald-400 font-semibold';
+  const accentClass = executionDecision === 'BUY'
+    ? 'card-accent-buy card-hover-buy'
+    : executionDecision === 'HOLD'
+      ? 'card-accent-hold card-hover-hold'
+      : 'card-accent-nobuy card-hover-nobuy';
+
+  const row = (label, val, valClass = 'text-slate-300', tooltipKey = null) => {
+    const tooltipHtml = tooltipKey ? ` <span data-tooltip="${tooltipKey}" class="cursor-help opacity-30 text-[8px] hover:opacity-100 transition-opacity">ⓘ</span>` : '';
+    return `
+    <div class="flex justify-between items-center py-1 border-b border-white/5 last:border-0 hover:bg-white/5 px-1 rounded transition-colors group/item">
+      <span class="text-[10px] text-slate-500">${label}${tooltipHtml}</span>
+      <span class="text-[10px] font-medium ${valClass}">${val}</span>
+    </div>
+  `;
+  };
+
+  return `
+    <article class="glass-card ${accentClass} rounded-2xl p-4 cursor-pointer transition-all duration-300 animate-fade-in-up" data-ticker="${ticker}">
+      <header class="mb-3 flex items-start justify-between gap-2 border-b border-white/10 pb-2">
+        <div class="min-w-0 flex-1">
+          <h2 class="text-sm font-bold leading-tight text-white truncate" title="${name}">${name}</h2>
+          <div class="mt-1 flex flex-wrap gap-1.5">
+            <span class="header-pill text-[9px] uppercase tracking-widest text-sky-400">${ticker}</span>
+            <span class="header-pill text-[9px] text-slate-400">${sector}</span>
+          </div>
+        </div>
+        <div class="flex shrink-0 items-center gap-1.5">
+          <span class="badge-glow rounded-full bg-slate-900/80 border border-slate-700/50 px-2.5 py-1 text-[10px] ${mosClass}">MOS ${mos}</span>
+          <button type="button" data-delete-ticker="${ticker}" class="rounded-lg border border-rose-700/40 bg-rose-950/30 p-1.5 text-rose-300 hover:border-rose-500 hover:text-white transition-all">🗑️</button>
+        </div>
+      </header>
+
+      <div class="space-y-0.5 max-h-[400px] overflow-y-auto custom-scrollbar pr-1">
+        ${row('Price', price, 'text-white font-bold', 'Price')}
+        ${row('Revenue Annual (Prev)', revenue)}
+        ${row('EPS NOW', epsNow)}
+        ${row('PER NOW', perNow, 'text-amber-300', 'PER')}
+        ${row('HIGH 52', high52)}
+        ${row('LOW 52', low52)}
+        ${row('Shares', shares)}
+        ${row('Market Cap', marketCap)}
+        ${row('Down From High 52', downFromHigh, isNegative(downFromHigh) ? 'text-negative' : 'text-emerald-400')}
+        ${row('Down From This Month', downFromMonth, isNegative(downFromMonth) ? 'text-negative' : 'text-emerald-400')}
+        ${row('Down From This Week', downFromWeek, isNegative(downFromWeek) ? 'text-negative' : 'text-emerald-400')}
+        ${row('Down From Today', downFromToday, isNegative(downFromToday) ? 'text-negative' : 'text-emerald-400')}
+        ${row('Rise From Low 52', riseFromLow, 'text-emerald-400')}
+        ${row('BVP Per S', bvpPerS)}
+        ${row('ROE', roe, 'text-sky-300', 'ROE')}
+        ${row('Graham Number', graham)}
+        ${row('MOS', mos, mosClass, 'MOS')}
+        ${row('PBV', pbv, 'text-violet-300', 'PBV')}
+        ${row('Dividend Yield', divYield, 'text-emerald-400', 'Dividend Yield')}
+        ${row('Dividend Growth', divGrowth, isNegative(divGrowth) ? 'text-negative' : 'text-emerald-300', 'Dividend Growth')}
+        ${row('Payout Ratio', payoutRatio, 'text-slate-300', 'Payout Ratio')}
+        ${row('Payout Penalty', payoutPenalty)}
+        
+        <div class="mt-3 pt-2 border-t border-white/10 space-y-0.5">
+          ${row('Base Signal (Hybrid)', buyDecision)}
+          ${row('Final Signal (Detailed)', executionDecision, executionDecision === 'BUY' ? 'text-emerald-400' : 'text-amber-400')}
+          ${row('Final Execution', executionDecision, 'font-black ' + (executionDecision === 'BUY' ? 'text-emerald-400' : 'text-amber-400'))}
+          ${row('Base Score', hybridScore)}
+          ${row('Final Score', finalHybridScore, 'text-sky-400 font-bold')}
+          ${row('Final Category', finalHybridCategory, 'text-emerald-400')}
+          ${row('Final Mode', finalMode)}
+          ${row('CAGR Applied', cagrApplied, 'text-emerald-400')}
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function buildCardHtml(ticker, s) {
   const name = s['Name'] ?? '-';
   const sector = s['Sector'] ?? '-';
   const price = formatNumber(s['Price']);
@@ -129,21 +242,11 @@ export function buildCardHtml(ticker, s) {
     s['Payout Penalty'] == null || Number.isNaN(Number(s['Payout Penalty']))
       ? '-'
       : Number(s['Payout Penalty']).toFixed(2);
+  
   const buyDecision = s['Decision Buy'] ?? 'NO BUY';
-  const finalDecision = s['Final Decision Buy'] ?? buyDecision;
   const executionDecision = s['Execution Decision'] ?? buyDecision;
   const safetyCheck = s['Safety Check'] ?? '-';
-  const discountDecision = s['Decision Discount'] ?? '-';
-  const discountScore =
-    s['Discount Score'] == null || Number.isNaN(Number(s['Discount Score']))
-      ? '-'
-      : Number(s['Discount Score']).toFixed(3);
-  const discountTimingVerdict = s['Discount Timing Verdict'] ?? '-';
-  const dividendDecision = s['Decision Dividend'] ?? '-';
-  const qualityScoreVal = typeof s['Quality Score'] === 'number' ? s['Quality Score'] : null;
-  const qualityScore = qualityScoreVal != null ? qualityScoreVal.toFixed(3) : '-';
   const qualityLabel = s['Quality Label'] ?? '-';
-  const qualityVerdict = s['Quality Verdict'] ?? '-';
   const hybridScoreValue = typeof s['Hybrid Score'] === 'number' ? s['Hybrid Score'] : null;
   const hybridScore = hybridScoreValue != null ? hybridScoreValue.toFixed(3) : '-';
   const finalHybridScoreValue =
@@ -350,20 +453,8 @@ function setDashboardViewMode(mode) {
 let currentSort = 'score-desc';
 let currentSectorFilter = 'all';
 
-function renderDashboardCards() {
-  const grid = document.getElementById('stocks-cards'); // Changed to stocks-cards as per original HTML
-  if (!grid) return;
-
+function getSortedAndFilteredTickers() {
   const entries = Array.from(tickerCache.entries());
-  if (entries.length === 0) {
-    grid.innerHTML = `
-      <div class="col-span-full py-20 text-center">
-        <div class="text-4xl mb-4">🔍</div>
-        <p class="text-slate-500">Belum ada saham yang ditambahkan.</p>
-      </div>
-    `;
-    return;
-  }
 
   // Populate Sector Filter if needed
   const sectors = new Set(['all']);
@@ -405,7 +496,41 @@ function renderDashboardCards() {
     }
   });
 
-  grid.innerHTML = filtered.map(([ticker, payload]) => buildCardHtml(ticker, payload.stock)).join('');
+  return filtered.map(([ticker, payload]) => [ticker, payload.stock]);
+}
+
+function updateStatus() {
+  const statusEl = document.getElementById('status');
+  if (statusEl) {
+    statusEl.textContent = `Menampilkan ${tickerCache.size} saham.`;
+  }
+}
+
+function renderDashboardCards() {
+  const container = document.getElementById('stocks-cards');
+  if (!container) return;
+
+  const sortedTickers = getSortedAndFilteredTickers();
+  
+  if (sortedTickers.length === 0) {
+    container.innerHTML = `
+      <div class="col-span-full py-12 text-center animate-fade-in">
+        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-900 border border-slate-800 mb-4">
+          <span class="text-2xl text-slate-700">🔍</span>
+        </div>
+        <p class="text-slate-500 text-sm">Tidak ada saham yang ditemukan.</p>
+      </div>
+    `;
+    updateStatus();
+    return;
+  }
+
+  // Choose renderer based on mode
+  const builder = dashboardDisplayMode === 'full' ? buildFullCardHtml : buildCardHtml;
+  container.innerHTML = sortedTickers.map(([ticker, stock]) => builder(ticker, stock)).join('');
+  
+  updateStatus();
+  tooltips.init();
 }
 
 async function loadSavedTickers() {
@@ -804,6 +929,16 @@ function init() {
       if (!t) return;
       sessionStorage.setItem('currentTicker', t);
       window.location.href = 'detailed.html';
+    });
+  }
+
+  const displayModeSelect = document.getElementById('dashboard-display-mode');
+  if (displayModeSelect) {
+    displayModeSelect.value = dashboardDisplayMode;
+    displayModeSelect.addEventListener('change', (e) => {
+      dashboardDisplayMode = e.target.value;
+      localStorage.setItem(DASHBOARD_DISPLAY_MODE_KEY, dashboardDisplayMode);
+      renderDashboardCards();
     });
   }
 
