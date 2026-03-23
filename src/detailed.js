@@ -118,12 +118,23 @@ function renderCagrTable(ticker, cagrData) {
   container.classList.remove('hidden');
 }
 
+function isNegative(val) {
+  if (!val || val === '-') return false;
+  const clean = val.trim();
+  return clean.startsWith('-') && !clean.startsWith('-0.00');
+}
+
 function renderFundamentals(ticker, stock) {
   const summary = document.getElementById('fundamental-summary');
   if (!summary || !stock) return;
 
-  const nameEl = document.getElementById('fund-name');
-  const tickerEl = document.getElementById('fund-ticker');
+  // New Header Elements
+  const tickerTitleEl = document.getElementById('fund-ticker-title');
+  const nameTitleEl = document.getElementById('fund-name-title');
+  const yfLinkEl = document.getElementById('yfinance-link');
+  const yfChartLinkEl = document.getElementById('yfinance-chart-link');
+
+  // Existing Elements
   const priceEl = document.getElementById('fund-price');
   const roeEl = document.getElementById('fund-roe');
   const mosEl = document.getElementById('fund-mos');
@@ -152,7 +163,6 @@ function renderFundamentals(ticker, stock) {
   const timingVerdictEl = document.getElementById('fund-timing-verdict');
   const qualityScoreEl = document.getElementById('fund-quality-score');
   const qualityLabelEl = document.getElementById('fund-quality-label');
-  const qualityVerdictEl = document.getElementById('fund-quality-verdict');
 
   const name = stock['Name'] ?? ticker;
   const price = formatNumber(stock['Price']);
@@ -190,19 +200,37 @@ function renderFundamentals(ticker, stock) {
   const qualityScore =
     typeof stock['Quality Score'] === 'number' ? stock['Quality Score'].toFixed(3) : '-';
   const qualityLabel = stock['Quality Label'] ?? '-';
-  const qualityVerdict = stock['Quality Verdict'] ?? '-';
 
-  if (nameEl) nameEl.textContent = name;
-  if (tickerEl) tickerEl.textContent = ticker;
+  // Helper for conditional coloring
+  const applyColor = (el, val) => {
+    if (!el) return;
+    el.textContent = val;
+    if (isNegative(val)) {
+      el.classList.add('text-negative', 'font-bold');
+      el.classList.remove('text-emerald-400', 'text-sky-400');
+    } else {
+      el.classList.remove('text-negative', 'font-bold');
+    }
+  };
+
+  // Populate Header & Links
+  if (tickerTitleEl) tickerTitleEl.textContent = ticker;
+  if (nameTitleEl) nameTitleEl.textContent = name;
+  if (yfLinkEl) yfLinkEl.href = `https://finance.yahoo.com/quote/${ticker}`;
+  if (yfChartLinkEl) yfChartLinkEl.href = `https://finance.yahoo.com/quote/${ticker}/chart`;
+
+  // Populate Metrics with Coloring
   if (priceEl) priceEl.textContent = price;
-  if (roeEl) roeEl.textContent = roe;
-  if (mosEl) mosEl.textContent = mos;
+  applyColor(roeEl, roe);
+  applyColor(mosEl, mos);
+  applyColor(divGrowthEl, divGrowth);
+  applyColor(dfhEl, downFromHigh);
+  applyColor(dfmEl, downFromMonth);
+  applyColor(dfwEl, downFromWeek);
+  applyColor(dftEl, downFromToday);
+
   if (pbvEl) pbvEl.textContent = pbv;
   if (divEl) divEl.textContent = divYield;
-  if (dfhEl) dfhEl.textContent = downFromHigh;
-  if (dfmEl) dfmEl.textContent = downFromMonth;
-  if (dfwEl) dfwEl.textContent = downFromWeek;
-  if (dftEl) dftEl.textContent = downFromToday;
   if (revEl) revEl.textContent = revenue;
   if (epsEl) epsEl.textContent = epsNow;
   if (perEl) perEl.textContent = perNow;
@@ -213,16 +241,20 @@ function renderFundamentals(ticker, stock) {
   if (mcEl) mcEl.textContent = marketCap;
   if (bvpEl) bvpEl.textContent = bvpPerS;
   if (grahamEl) grahamEl.textContent = graham;
-  if (divGrowthEl) divGrowthEl.textContent = divGrowth;
   if (payoutEl) payoutEl.textContent = payoutRatio;
   if (payoutPenaltyEl) payoutPenaltyEl.textContent = payoutPenalty;
-  if (execEl) execEl.textContent = executionDecision;
+  
+  if (execEl) {
+    execEl.textContent = executionDecision;
+    execEl.className = 'text-sm font-black tracking-tight ' + 
+      (executionDecision === 'BUY' ? 'text-emerald-400' : executionDecision === 'HOLD' ? 'text-amber-400' : 'text-slate-400');
+  }
+
   if (safetyEl) safetyEl.textContent = safetyCheck;
   if (discountScoreEl) discountScoreEl.textContent = discountScore;
   if (timingVerdictEl) timingVerdictEl.textContent = timingVerdict;
   if (qualityScoreEl) qualityScoreEl.textContent = qualityScore;
   if (qualityLabelEl) qualityLabelEl.textContent = qualityLabel;
-  if (qualityVerdictEl) qualityVerdictEl.textContent = qualityVerdict;
 
   summary.classList.remove('hidden');
 }

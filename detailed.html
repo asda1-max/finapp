@@ -28,85 +28,110 @@
               🗑️ Hapus Entry
             </button>
           </div>
-          <div>
-            <h1 id="detail-title" class="text-2xl font-semibold tracking-tight gradient-text flex items-center gap-2">
-              <span>📈</span>
-              Detailed CAGR Analysis
-            </h1>
-            <p class="mt-1 text-sm text-slate-400">
-              Gunakan mode Annual (manual), Direct (CAGR langsung), atau Auto (annual report otomatis).
-              Sistem akan hitung CAGR dan memberi signal analisis + final decision dari Hybrid.
-            </p>
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h1 id="detail-title" class="text-2xl font-semibold tracking-tight gradient-text flex items-center gap-2">
+                <span>📈</span>
+                Detailed Analysis: <span id="fund-ticker-title">-</span>
+              </h1>
+              <p id="fund-name-title" class="text-xs text-slate-400 font-medium tracking-wide pb-1">-</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <a 
+                id="yfinance-link"
+                href="#" 
+                target="_blank" 
+                class="rounded-lg border border-sky-400/30 bg-sky-500/10 px-3 py-1.5 text-[10px] font-bold text-sky-400 hover:bg-sky-500/20 transition-all flex items-center gap-1.5"
+              >
+                🌐 View yFinance
+              </a>
+              <a 
+                id="yfinance-chart-link"
+                href="#" 
+                target="_blank" 
+                class="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-bold text-emerald-400 hover:bg-emerald-500/20 transition-all flex items-center gap-1.5"
+              >
+                📊 Interactive Chart
+              </a>
+            </div>
           </div>
         </header>
 
         <section class="space-y-4 glass-card rounded-2xl p-4 animate-fade-in-up delay-200">
           <div
             id="fundamental-summary"
-            class="mb-3 hidden glass-card rounded-xl p-4 text-[11px] text-slate-200 glow-sky animate-fade-in-scale"
+            class="mb-3 hidden glass-card rounded-2xl p-5 text-[11px] text-slate-200 glow-sky animate-fade-in-scale"
           >
-            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p id="fund-name" class="text-sm font-semibold text-slate-50">-</p>
-                <p id="fund-ticker" class="text-[10px] uppercase text-slate-400">-</p>
-              </div>
-              <div class="text-right text-xs text-slate-300">
-                <div>
-                  <span class="text-slate-400 cursor-help" data-tooltip="Price">Price ⓘ</span>
-                  <span id="fund-price" class="font-medium">-</span>
+            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <!-- Q1: Market Context -->
+              <div class="metric-group !bg-slate-900/40 !p-3">
+                <div class="section-label mb-2 flex items-center justify-between">
+                   <span>📈 Market Context</span>
+                   <span id="fund-price" class="text-white font-black text-xs">-</span>
                 </div>
-                <div>
-                  <span class="text-slate-400 cursor-help" data-tooltip="ROE">ROE ⓘ</span>
-                  <span id="fund-roe" class="font-medium">-</span>
+                <div class="space-y-1.5">
+                  <div class="flex justify-between"><span class="text-slate-500 cursor-help" data-tooltip="HIGH 52">HIGH 52 ⓘ</span><span id="fund-high52">-</span></div>
+                  <div class="flex justify-between"><span class="text-slate-500 cursor-help" data-tooltip="LOW 52">LOW 52 ⓘ</span><span id="fund-low52">-</span></div>
+                  <div class="flex justify-between"><span class="text-slate-500">Rise from Low</span><span id="fund-risefromlow" class="text-emerald-400">-</span></div>
+                  <div class="divider-gradient !bg-slate-800/50 my-1"></div>
+                  <div class="flex justify-between"><span class="text-slate-500 text-[9px] uppercase">v High 52</span><span id="fund-downfromhigh">-</span></div>
+                  <div class="flex justify-between"><span class="text-slate-500 text-[9px] uppercase">v Month</span><span id="fund-downfrommonth">-</span></div>
+                  <div class="flex justify-between"><span class="text-slate-500 text-[9px] uppercase">v Week</span><span id="fund-downfromweek">-</span></div>
+                  <div class="flex justify-between"><span class="text-slate-500 text-[9px] uppercase">v Today</span><span id="fund-downfromtoday">-</span></div>
                 </div>
-                <div>
-                  <span class="text-slate-400 cursor-help" data-tooltip="MOS">MOS ⓘ</span>
-                  <span id="fund-mos" class="font-medium">-</span>
-                </div>
               </div>
-            </div>
-            <div class="mt-2 grid gap-2 text-[10px] text-slate-300 sm:grid-cols-3">
-              <div class="flex justify-between"><span class="cursor-help" data-tooltip="PBV">PBV ⓘ</span><span id="fund-pbv" class="font-medium">-</span></div>
-              <div class="flex justify-between">
-                <span class="cursor-help" data-tooltip="Dividend Yield">Dividend Yield ⓘ</span><span id="fund-dividend" class="font-medium">-</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="cursor-help" data-tooltip="Down From High 52">Down From High 52 ⓘ</span><span id="fund-downfromhigh" class="font-medium">-</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="cursor-help" data-tooltip="Down From This Month">Down From This Month ⓘ</span><span id="fund-downfrommonth" class="font-medium">-</span>
-              </div>
-              <div class="flex justify-between">
-                <span>Down From This Week</span><span id="fund-downfromweek" class="font-medium">-</span>
-              </div>
-              <div class="flex justify-between">
-                <span>Down From Today</span><span id="fund-downfromtoday" class="font-medium">-</span>
-              </div>
-            </div>
 
-            <div class="mt-2 grid gap-2 text-[10px] text-slate-300 sm:grid-cols-3">
-              <div class="flex justify-between">
-                <span class="cursor-help" data-tooltip="Revenue Annual (Prev)">Revenue Annual (Prev) ⓘ</span><span id="fund-revenue" class="font-medium">-</span>
+              <!-- Q2: Valuation & Quality -->
+              <div class="metric-group !bg-slate-900/40 !p-3">
+                <div class="section-label mb-2">⚖️ Valuation & Quality</div>
+                <div class="space-y-1.5">
+                  <div class="flex justify-between"><span class="text-slate-500 cursor-help" data-tooltip="ROE">ROE ⓘ</span><span id="fund-roe" class="text-sky-400 font-bold">-</span></div>
+                  <div class="flex justify-between"><span class="text-slate-500 cursor-help" data-tooltip="PBV">PBV ⓘ</span><span id="fund-pbv" class="text-violet-400">-</span></div>
+                  <div class="flex justify-between"><span class="text-slate-500 cursor-help" data-tooltip="PER">PER ⓘ</span><span id="fund-per" class="text-amber-400">-</span></div>
+                  <div class="flex justify-between"><span class="text-slate-500 cursor-help" data-tooltip="Graham Number">Graham Number ⓘ</span><span id="fund-graham">-</span></div>
+                  <div class="divider-gradient !bg-slate-800/50 my-1"></div>
+                  <div class="flex justify-between"><span class="text-slate-500">Market Cap</span><span id="fund-marketcap">-</span></div>
+                  <div class="flex justify-between"><span class="text-slate-500">Revenue (Prev)</span><span id="fund-revenue" class="text-slate-400">-</span></div>
+                  <div class="flex justify-between"><span class="text-slate-500">EPS Now</span><span id="fund-eps" class="text-slate-400">-</span></div>
+                  <div class="flex justify-between"><span class="text-slate-500">Shares</span><span id="fund-shares" class="text-slate-400">-</span></div>
+                </div>
               </div>
-              <div class="flex justify-between"><span class="cursor-help" data-tooltip="EPS NOW">EPS NOW ⓘ</span><span id="fund-eps" class="font-medium">-</span></div>
-              <div class="flex justify-between"><span class="cursor-help" data-tooltip="PER">PER NOW ⓘ</span><span id="fund-per" class="font-medium">-</span></div>
-              <div class="flex justify-between"><span class="cursor-help" data-tooltip="HIGH 52">HIGH 52 ⓘ</span><span id="fund-high52" class="font-medium">-</span></div>
-              <div class="flex justify-between"><span class="cursor-help" data-tooltip="LOW 52">LOW 52 ⓘ</span><span id="fund-low52" class="font-medium">-</span></div>
-              <div class="flex justify-between"><span>Rise From Low 52</span><span id="fund-risefromlow" class="font-medium">-</span></div>
-              <div class="flex justify-between"><span class="cursor-help" data-tooltip="Shares">Shares ⓘ</span><span id="fund-shares" class="font-medium">-</span></div>
-              <div class="flex justify-between"><span class="cursor-help" data-tooltip="Market Cap">Market Cap ⓘ</span><span id="fund-marketcap" class="font-medium">-</span></div>
-              <div class="flex justify-between"><span class="cursor-help" data-tooltip="BVP Per S">BVP Per S ⓘ</span><span id="fund-bvp" class="font-medium">-</span></div>
-              <div class="flex justify-between"><span class="cursor-help" data-tooltip="Graham Number">Graham Number ⓘ</span><span id="fund-graham" class="font-medium">-</span></div>
-              <div class="flex justify-between"><span class="cursor-help" data-tooltip="Dividend Growth">Dividend Growth ⓘ</span><span id="fund-div-growth" class="font-medium">-</span></div>
-              <div class="flex justify-between"><span class="cursor-help" data-tooltip="Payout Ratio">Payout Ratio ⓘ</span><span id="fund-payout" class="font-medium">-</span></div>
-              <div class="flex justify-between"><span class="cursor-help" data-tooltip="Payout Penalty">Payout Penalty ⓘ</span><span id="fund-payout-penalty" class="font-medium">-</span></div>
-              <div class="flex justify-between"><span class="cursor-help" data-tooltip="Final Execution">Execution Decision ⓘ</span><span id="fund-exec" class="font-medium">-</span></div>
-              <div class="flex justify-between"><span class="cursor-help" data-tooltip="Safety Check">Safety Check ⓘ</span><span id="fund-safety" class="font-medium">-</span></div>
-              <div class="flex justify-between"><span class="cursor-help" data-tooltip="Discount Score">Discount Score ⓘ</span><span id="fund-discount-score" class="font-medium">-</span></div>
-              <div class="flex justify-between"><span class="cursor-help" data-tooltip="Timing Verdict">Timing Verdict ⓘ</span><span id="fund-timing-verdict" class="font-medium">-</span></div>
-              <div class="flex justify-between"><span class="cursor-help" data-tooltip="Quality Score">Quality Score ⓘ</span><span id="fund-quality-score" class="font-medium">-</span></div>
-              <div class="flex justify-between"><span class="cursor-help" data-tooltip="Quality Label">Quality Label ⓘ</span><span id="fund-quality-label" class="font-medium">-</span></div>
-              <div class="flex justify-between"><span>Quality Verdict</span><span id="fund-quality-verdict" class="font-medium">-</span></div>
+
+              <!-- Q3: Income & Growth -->
+              <div class="metric-group !bg-emerald-500/5 !p-3">
+                <div class="section-label mb-2 !text-emerald-500/70">💰 Income & Growth</div>
+                <div class="space-y-1.5">
+                  <div class="flex justify-between"><span class="text-slate-500 cursor-help" data-tooltip="MOS">MOS ⓘ</span><span id="fund-mos" class="font-black text-xs">-</span></div>
+                  <div class="flex justify-between"><span class="text-slate-500 cursor-help" data-tooltip="Dividend Yield">Yield ⓘ</span><span id="fund-dividend" class="text-emerald-400 font-bold">-</span></div>
+                  <div class="flex justify-between"><span class="text-slate-500 cursor-help" data-tooltip="Dividend Growth">Div. Growth ⓘ</span><span id="fund-div-growth">-</span></div>
+                  <div class="divider-gradient !bg-emerald-500/10 my-1"></div>
+                  <div class="flex justify-between"><span class="text-slate-500 cursor-help" data-tooltip="Payout Ratio">Payout Ratio ⓘ</span><span id="fund-payout">-</span></div>
+                  <div class="flex justify-between"><span class="text-slate-500 cursor-help" data-tooltip="Payout Penalty">Payout Penalty ⓘ</span><span id="fund-payout-penalty" class="text-amber-500">-</span></div>
+                  <div class="flex justify-between"><span class="text-slate-500 cursor-help" data-tooltip="BVP Per S">BVP Per S ⓘ</span><span id="fund-bvp">-</span></div>
+                </div>
+              </div>
+
+              <!-- Q4: Analysis Verdict -->
+              <div class="metric-group !bg-sky-500/5 !p-3">
+                <div class="section-label mb-2 !text-sky-500/70">🎯 Analysis Verdict</div>
+                <div class="space-y-2">
+                  <div class="bg-slate-900/60 p-2 rounded border border-slate-800/50">
+                    <p class="text-[8px] text-slate-500 uppercase tracking-tighter">Final Execution</p>
+                    <p id="fund-exec" class="text-sm font-black tracking-tight">-</p>
+                  </div>
+                  <div class="space-y-1 text-[10px]">
+                    <div class="flex justify-between"><span class="text-slate-500 uppercase text-[8px]">Quality</span><span id="fund-quality-label" class="font-bold text-cyan-400">-</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500 uppercase text-[8px]">Safety</span><span id="fund-safety" class="text-amber-400 font-medium text-right">-</span></div>
+                    <div class="divider-gradient !bg-sky-500/10 my-1"></div>
+                    <div class="flex justify-between"><span class="text-slate-500">Quality Score</span><span id="fund-quality-score">-</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">Discount Score</span><span id="fund-discount-score">-</span></div>
+                    <div class="pt-1.5 mt-1 border-t border-slate-800/50">
+                       <p class="text-[8px] text-slate-500 uppercase tracking-tighter mb-0.5">Timing Verdict</p>
+                       <p id="fund-timing-verdict" class="text-slate-300 font-medium leading-tight">-</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 

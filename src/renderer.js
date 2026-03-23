@@ -92,7 +92,16 @@ function isLikelyInvalidTicker(stock, ticker) {
   return noMarketData && unresolvedName;
 }
 
-function buildCardHtml(ticker, s) {
+/**
+ * Checks if a string value represents a negative number (e.g. "-15.20%" or "-1,000")
+ */
+function isNegative(val) {
+  if (typeof val !== 'string') return false;
+  const clean = val.trim();
+  return clean.startsWith('-') && !clean.startsWith('-0.00');
+}
+
+export function buildCardHtml(ticker, s) {
   const name = s['Name'] ?? '-';
   const sector = s['Sector'] ?? '-';
   const price = formatNumber(s['Price']);
@@ -142,287 +151,172 @@ function buildCardHtml(ticker, s) {
   const finalHybridScore = finalHybridScoreValue != null ? finalHybridScoreValue.toFixed(3) : '-';
   const hybridCategory = s['Hybrid Category'] ?? '-';
   const finalHybridCategory = s['Final Hybrid Category'] ?? hybridCategory;
-  const finalHybridMode = s['Final Hybrid Mode'] ?? '-';
-  const cagrApplied = s['CAGR Applied'] === true ? 'Yes' : 'No';
-  const cagrSource = s['CAGR Source'] ?? '-';
+  
+  // Conditional coloring classes
+  const mosClass = isNegative(mos) ? 'text-negative font-bold' : 'text-emerald-400 font-semibold';
+  const divGrowthClass = isNegative(divGrowth) ? 'text-negative' : 'text-emerald-300';
+  const priceMoveClass = (val) => isNegative(val) ? 'text-negative' : 'text-emerald-400';
 
-  // Determine accent border color based on execution decision
+  // Hover and border accent based on execution
   const accentClass = executionDecision === 'BUY'
-    ? 'card-accent-buy'
+    ? 'card-accent-buy card-hover-buy'
     : executionDecision === 'HOLD'
-      ? 'card-accent-hold'
-      : 'card-accent-nobuy';
+      ? 'card-accent-hold card-hover-hold'
+      : 'card-accent-nobuy card-hover-nobuy';
 
   let safetyBadgeHtml = '';
   if (safetyCheck.includes('[SOLVENCY HOLD]')) {
     safetyBadgeHtml = `<div class="mt-2 mb-1 p-1.5 rounded bg-yellow-950/40 border border-yellow-700/50 text-[10px] text-yellow-400 font-bold flex items-center justify-center gap-1.5 w-full">
-        ⚠️ Solvency Warning: High Leverage & Low Liquidity
+        ⚠️ Solvency Warning
     </div>`;
   } else if (safetyCheck.includes('[DANGER NO BUY]')) {
     safetyBadgeHtml = `<div class="mt-2 mb-1 p-1.5 rounded bg-red-950/40 border border-red-700/50 text-[10px] text-red-500 font-bold flex items-center justify-center gap-1.5 w-full">
-        🚨 DANGER: Toxic Debt Trap Avoided
+        🚨 DANGER: Debt Trap
     </div>`;
   }
 
-
   return `
     <article
-      class="glass-card ${accentClass} rounded-2xl p-3 sm:p-4 cursor-pointer transition-all duration-300 hover:scale-[1.01] animate-fade-in-up"
+      class="glass-card ${accentClass} rounded-2xl p-4 cursor-pointer transition-all duration-300 animate-fade-in-up"
       data-ticker="${ticker}"
     >
-      <header class="mb-2 flex items-start justify-between gap-2">
-        <div class="min-w-0 flex-1 pr-1">
-          <h2 class="text-sm font-semibold leading-tight text-slate-50 truncate" title="${name}">${name}</h2>
-          <p class="mt-0.5 text-[10px] uppercase text-slate-500 tracking-wide">${ticker}</p>
-          <p class="mt-0.5 text-[10px] text-slate-500">Sector: ${sector}</p>
+      <header class="mb-3 flex items-start justify-between gap-2">
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2">
+            <h2 class="text-sm font-bold leading-tight text-white truncate" title="${name}">${name}</h2>
+            <a 
+              href="https://finance.yahoo.com/quote/${ticker}" 
+              target="_blank" 
+              class="text-[10px] text-sky-400 hover:text-sky-300 transition-colors flex items-center gap-0.5"
+              title="Lihat di Yahoo Finance"
+              onclick="event.stopPropagation();"
+            >
+              <span class="p-0.5 rounded bg-sky-500/10 border border-sky-500/20">yF</span>
+            </a>
+          </div>
+          <div class="mt-1 flex flex-wrap gap-1.5">
+            <span class="header-pill text-[9px] uppercase tracking-widest text-sky-400">${ticker}</span>
+            <span class="header-pill text-[9px] text-slate-400">${sector}</span>
+          </div>
         </div>
-        <div class="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
-          <span class="badge-glow relative rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-300">MOS ${mos}</span>
+        <div class="flex shrink-0 items-center gap-1.5">
+          <span class="badge-glow rounded-full bg-slate-900/80 border border-slate-700/50 px-2.5 py-1 text-[10px] ${mosClass}">MOS ${mos}</span>
           <button
             type="button"
             data-delete-ticker="${ticker}"
-            class="rounded-md border border-rose-700/40 bg-rose-950/30 px-2 py-0.5 text-[10px] font-medium text-rose-300 hover:border-rose-500 hover:text-rose-200 hover:bg-rose-950/50 transition-all duration-200"
+            class="rounded-lg border border-rose-700/40 bg-rose-950/30 p-1.5 text-rose-300 hover:border-rose-500 hover:text-white transition-all"
             title="Hapus entry"
           >
             🗑️
           </button>
         </div>
       </header>
-      <div class="space-y-1.5 text-[11px] text-slate-300">
-        <div class="flex justify-between gap-2">
-          <span class="text-slate-400 flex items-center gap-1">
-            Price
-            <span data-tooltip="Price" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-medium">${price}</span>
+      
+      <div class="space-y-3">
+        <!-- Market Info Section -->
+        <div class="metric-group">
+          <div class="section-label"><span>📈</span> Market Info</div>
+          <div class="space-y-1 text-[11px]">
+            <div class="flex justify-between items-center group/item">
+              <span class="text-slate-500">Price <span data-tooltip="Price" class="cursor-help opacity-40">ⓘ</span></span>
+              <span class="font-bold text-white">${price}</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500 text-[10px]">Down from High 52</span>
+              <span class="font-medium ${priceMoveClass(downFromHigh)}">${downFromHigh}</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500 text-[10px]">Down from Month</span>
+              <span class="font-medium ${priceMoveClass(downFromMonth)}">${downFromMonth}</span>
+            </div>
+          </div>
         </div>
-        <div class="flex justify-between gap-2">
-          <span class="text-slate-400 flex items-center gap-1">
-            Revenue Annual (Prev)
-            <span data-tooltip="Revenue Annual (Prev)" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-medium">${revenue}</span>
+
+        <!-- Fundamentals & Valuation -->
+        <div class="metric-group">
+          <div class="section-label"><span>⚖️</span> Valuation</div>
+          <div class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
+            <div class="flex justify-between border-b border-slate-800/50 pb-0.5">
+              <span class="text-slate-500">ROE <span data-tooltip="ROE" class="cursor-help opacity-30">ⓘ</span></span>
+              <span class="font-medium text-sky-300">${roe}</span>
+            </div>
+            <div class="flex justify-between border-b border-slate-800/50 pb-0.5">
+              <span class="text-slate-500">PBV <span data-tooltip="PBV" class="cursor-help opacity-30">ⓘ</span></span>
+              <span class="font-medium text-violet-300">${pbv}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500">PER <span data-tooltip="PER" class="cursor-help opacity-30">ⓘ</span></span>
+              <span class="font-medium text-amber-300">${per}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500 text-[10px]">Yield</span>
+              <span class="font-medium text-emerald-400">${divYield}</span>
+            </div>
+          </div>
         </div>
-        <div class="flex justify-between gap-2">
-          <span class="text-slate-400 flex items-center gap-1">
-            EPS NOW
-            <span data-tooltip="EPS NOW" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-medium">${eps}</span>
+
+        <!-- Dividend & Growth -->
+        <div class="metric-group bg-emerald-500/5 border-emerald-500/10">
+          <div class="section-label !text-emerald-500/60"><span>💰</span> Growth & Dividen</div>
+          <div class="space-y-1 text-[11px]">
+             <div class="flex justify-between">
+              <span class="text-slate-500">Div. Growth <span data-tooltip="Dividend Growth" class="cursor-help opacity-30">ⓘ</span></span>
+              <span class="font-medium ${divGrowthClass}">${divGrowth}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500">Payout <span data-tooltip="Payout Ratio" class="cursor-help opacity-30">ⓘ</span></span>
+              <span class="font-medium text-slate-300">${payoutRatio}</span>
+            </div>
+          </div>
         </div>
-        <div class="flex justify-between gap-2">
-          <span class="text-slate-400 flex items-center gap-1">
-            PER NOW
-            <span data-tooltip="PER" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-medium">${per}</span>
-        </div>
-        <div class="flex justify-between gap-2">
-          <span class="text-slate-400 flex items-center gap-1">
-            HIGH 52
-            <span data-tooltip="HIGH 52" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-medium">${high52}</span>
-        </div>
-        <div class="flex justify-between gap-2">
-          <span class="text-slate-400 flex items-center gap-1">
-            LOW 52
-            <span data-tooltip="LOW 52" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-medium">${low52}</span>
-        </div>
-        <div class="flex justify-between gap-2">
-          <span class="text-slate-400 flex items-center gap-1">
-            Shares
-            <span data-tooltip="Shares" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-medium">${shares}</span>
-        </div>
-        <div class="flex justify-between gap-2">
-          <span class="text-slate-400 flex items-center gap-1">
-            Market Cap
-            <span data-tooltip="Market Cap" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-medium">${marketCap}</span>
-        </div>
-        <div class="flex justify-between gap-2">
-          <span class="text-slate-400 flex items-center gap-1">
-            Down From High 52
-            <span data-tooltip="Down From High 52" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-medium">${downFromHigh}</span>
-        </div>
-        <div class="flex justify-between gap-2">
-          <span class="text-slate-400 flex items-center gap-1">
-            Down From This Month
-            <span data-tooltip="Down From This Month" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-medium">${downFromMonth}</span>
-        </div>
-        <div class="flex justify-between gap-2">
-          <span class="text-slate-400">Down From This Week</span>
-          <span class="font-medium">${downFromWeek}</span>
-        </div>
-        <div class="flex justify-between gap-2">
-          <span class="text-slate-400">Down From Today</span>
-          <span class="font-medium">${downFromToday}</span>
-        </div>
-        <div class="flex justify-between gap-2">
-          <span class="text-slate-400">Rise From Low 52</span>
-          <span class="font-medium">${riseFromLow}</span>
-        </div>
-        <div class="flex justify-between gap-2">
-          <span class="text-slate-400 flex items-center gap-1">
-            BVP Per S
-            <span data-tooltip="BVP Per S" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-medium">${bvp}</span>
-        </div>
-        <div class="flex justify-between gap-2">
-          <span class="text-slate-400 flex items-center gap-1">
-            ROE
-            <span data-tooltip="ROE" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-medium">${roe}</span>
-        </div>
-        <div class="flex justify-between gap-2">
-          <span class="text-slate-400 flex items-center gap-1">
-            Graham Number
-            <span data-tooltip="Graham Number" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-medium">${graham}</span>
-        </div>
-        <div class="flex justify-between gap-2">
-          <span class="text-slate-400 flex items-center gap-1">
-            MOS
-            <span data-tooltip="MOS" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-medium">${mos}</span>
-        </div>
-        <div class="flex justify-between gap-2">
-          <span class="text-slate-400 flex items-center gap-1">
-            PBV
-            <span data-tooltip="PBV" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-medium">${pbv}</span>
-        </div>
-        <div class="flex justify-between gap-2">
-          <span class="text-slate-400 flex items-center gap-1">
-            Dividend Yield
-            <span data-tooltip="Dividend Yield" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-medium">${divYield}</span>
-        </div>
-        <div class="flex justify-between gap-2">
-          <span class="text-slate-400 flex items-center gap-1">
-            Dividend Growth
-            <span data-tooltip="Dividend Growth" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-medium">${divGrowth}</span>
-        </div>
-        <div class="flex justify-between gap-2">
-          <span class="text-slate-400 flex items-center gap-1">
-            Payout Ratio
-            <span data-tooltip="Payout Ratio" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-medium">${payoutRatio}</span>
-        </div>
-        <div class="flex justify-between gap-2">
-          <span class="text-slate-400 flex items-center gap-1">
-            Payout Penalty
-            <span data-tooltip="Payout Penalty" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-medium">${payoutPenalty}</span>
-        </div>
+
         ${safetyBadgeHtml}
-        <div class="divider-gradient my-2"></div>
-        <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400 flex items-center gap-1">
-            Base Signal (Hybrid)
-            <span data-tooltip="Base Signal" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-semibold ${buyDecision === 'BUY' ? 'text-emerald-400' : 'text-slate-400'}">${buyDecision}</span>
-        </div>
-        <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400 flex items-center gap-1">
-            Final Signal (Detailed)
-            <span data-tooltip="Final Signal" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-semibold ${finalDecision === 'BUY' ? 'text-emerald-300' : 'text-slate-400'}">${finalDecision}</span>
-        </div>
-        <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400 flex items-center gap-1">
-            Final Execution
-            <span data-tooltip="Final Execution" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-semibold ${
-            executionDecision === 'BUY'
-              ? 'text-emerald-300'
-              : executionDecision === 'HOLD'
-                ? 'text-amber-300'
-                : 'text-slate-400'
-          }">${executionDecision}</span>
-        </div>
-        <div class="divider-gradient my-1.5"></div>
-        <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400 flex items-center gap-1">
-            Base Score
-            <span data-tooltip="Discount Score" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-medium text-cyan-300">${hybridScore}</span>
-        </div>
-        <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400 flex items-center gap-1">
-            Final Score
-            <span data-tooltip="Discount Score" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-medium text-emerald-300">${finalHybridScore}</span>
-        </div>
-        <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400">Final Category</span>
-          <span class="font-medium text-emerald-300">${finalHybridCategory}</span>
-        </div>
-        <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400 flex items-center gap-1">
-            Quality Score
-            <span data-tooltip="Quality Score" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-medium text-cyan-300">${qualityScore}</span>
-        </div>
-        <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400 flex items-center gap-1">
-            Quality Label
-            <span data-tooltip="Quality Label" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-medium text-emerald-300">${qualityLabel}</span>
-        </div>
-        <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400">Quality Verdict</span>
-          <span class="font-medium text-amber-300">${qualityVerdict}</span>
-        </div>
-        <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400 flex items-center gap-1">
-            Safety Check
-            <span data-tooltip="Safety Check" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-          </span>
-          <span class="font-medium text-amber-300">${safetyCheck}</span>
-        </div>
-        <div class="divider-gradient my-1.5"></div>
-        <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400">Diskon</span>
-          <span class="font-medium text-sky-300">${discountDecision}</span>
-        </div>
-        <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400">Discount Score</span>
-          <span class="font-medium text-cyan-300">${discountScore}</span>
-        </div>
-        <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400">Timing Verdict</span>
-          <span class="font-medium text-amber-300 text-right">${discountTimingVerdict}</span>
-        </div>
-        <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400">Dividen</span>
-          <span class="font-medium text-amber-300">${dividendDecision}</span>
+
+        <!-- System Verdict -->
+        <div class="metric-group bg-sky-500/5 border-sky-500/10 !p-3">
+          <div class="section-label !text-sky-500/60 flex justify-between items-baseline">
+            <span>🎯 System Verdict</span>
+            <span class="text-[9px] font-normal opacity-60">Base vs Final</span>
+          </div>
+          
+          <div class="space-y-2">
+            <!-- Main Signal (Base) -->
+            <div class="flex justify-between items-center px-2 py-1.5 rounded bg-slate-900/40 border border-slate-800/50">
+               <div>
+                  <p class="text-[8px] text-slate-500 uppercase tracking-tighter">Base Signal</p>
+                  <p class="text-[11px] font-bold text-slate-300">${buyDecision}</p>
+               </div>
+               <div class="text-right">
+                  <p class="text-[8px] text-slate-500 uppercase tracking-tighter">Base Score</p>
+                  <p class="text-sm font-black text-slate-400">${hybridScore}</p>
+               </div>
+            </div>
+
+            <!-- Final Decision (After Filters) -->
+            <div class="flex justify-between items-center px-2 py-2 rounded bg-sky-500/10 border border-sky-500/20 shadow-[0_0_15px_-5px_rgba(14,165,233,0.3)]">
+               <div>
+                  <p class="text-[9px] text-sky-500 uppercase font-black">Final Execution</p>
+                  <p class="text-base font-black tracking-tight ${
+                    executionDecision === 'BUY' ? 'text-emerald-400' : executionDecision === 'HOLD' ? 'text-amber-400' : 'text-slate-400'
+                  }">${executionDecision}</p>
+               </div>
+               <div class="text-right">
+                  <p class="text-[9px] text-sky-500 uppercase font-black">Final Score</p>
+                  <p class="text-xl font-black text-white">${finalHybridScore}</p>
+               </div>
+            </div>
+          </div>
+
+          <div class="mt-2 flex justify-between items-center text-[10px] px-1">
+             <div class="flex items-center gap-1">
+                <span class="text-slate-500">Quality</span>
+                <span class="font-bold text-cyan-400">${qualityLabel}</span>
+             </div>
+             <div class="flex items-center gap-1">
+                <span class="text-slate-500 uppercase text-[8px]">Group</span>
+                <span class="font-bold text-slate-400">${finalHybridCategory}</span>
+             </div>
+          </div>
         </div>
       </div>
     </article>

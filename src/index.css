@@ -339,3 +339,58 @@ input:focus, select:focus, textarea:focus {
   mask-composite: exclude;
   pointer-events: none;
 }
+
+/* ---------- Conditional Colors ---------- */
+.text-positive { color: #34d399 !important; } /* Emerald 400 */
+.text-negative { color: #fb7185 !important; } /* Rose 400 */
+.text-warning  { color: #fbbf24 !important; } /* Amber 400 */
+
+/* ---------- Metric Grouping ---------- */
+.metric-group {
+  background: rgba(30, 41, 59, 0.3);
+  border-radius: 12px;
+  padding: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.05);
+}
+
+.section-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(148, 163, 184, 0.5);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ---------- Header Pills ---------- */
+.header-pill {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+/* ---------- Enhanced Hover Glows ---------- */
+.card-hover-buy:hover {
+  box-shadow: 
+    0 10px 30px -10px rgba(16, 185, 129, 0.2),
+    0 4px 15px -5px rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.3) !important;
+}
+
+.card-hover-hold:hover {
+  box-shadow: 
+    0 10px 30px -10px rgba(245, 158, 11, 0.2),
+    0 4px 15px -5px rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.3) !important;
+}
+
+.card-hover-nobuy:hover {
+  box-shadow: 
+    0 10px 30px -10px rgba(71, 85, 105, 0.2),
+    0 4px 15px -5px rgba(71, 85, 105, 0.1);
+  border-color: rgba(71, 85, 105, 0.3) !important;
+}
