@@ -82,8 +82,32 @@
           <div id="status" class="mb-3 text-xs text-slate-400">
             Belum ada saham. Tambahkan dengan mengetik ticker di atas.
           </div>
-          <div id="stocks-cards" class="grid gap-3 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"></div>
+          <!-- Dashboard Toolbar: Sorting & Filtering -->
+        <div class="flex flex-wrap items-center justify-between gap-3 animate-fade-in-up delay-200">
+          <div class="flex items-center gap-2">
+            <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">Portfolio Overview</h2>
+            <div id="filter-sector-container">
+              <select id="filter-sector" class="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-[10px] text-slate-300 focus:outline-none focus:border-sky-500 transition-all">
+                <option value="all">Semua Sektor</option>
+              </select>
+            </div>
+          </div>
+          
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] text-slate-500">Urutkan:</span>
+            <select id="sort-by" class="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-[10px] text-slate-300 focus:outline-none focus:border-sky-500 transition-all">
+              <option value="score-desc">Hybrid Score (Highest)</option>
+              <option value="score-asc">Hybrid Score (Lowest)</option>
+              <option value="ticker-asc">Ticker (A-Z)</option>
+              <option value="yield-desc">Dividend Yield</option>
+              <option value="mos-desc">MOS (Highest)</option>
+            </select>
+          </div>
+        </div>
 
+        <div id="stocks-cards" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 animate-fade-in-up delay-300">
+          <!-- Cards injected by renderer.js -->
+        </div>
           <div class="mt-5 border-t border-slate-800/50 pt-4">
             <button
               id="reset-all-btn"

@@ -1,5 +1,6 @@
-import './index.css';
 import { initNavbar } from './navbar.js';
+import { toast } from './utils/toast.js';
+import { tooltips } from './utils/tooltip.js';
 initNavbar();
 
 const CRITERIA = [
@@ -28,6 +29,21 @@ const DEFAULT_CONFIG = {
   },
 };
 
+const PRESETS = {
+  dividend: {
+    use_cagr: [0.30, 0.05, 0.40, 0.10, 0.05, 0.05, 0.00, 0.05],
+    no_cagr:  [0.40, 0.00, 0.50, 0.05, 0.05, 0.00, 0.00, 0.00]
+  },
+  value: {
+    use_cagr: [0.15, 0.05, 0.05, 0.30, 0.20, 0.20, 0.00, 0.05],
+    no_cagr:  [0.15, 0.00, 0.05, 0.40, 0.20, 0.20, 0.00, 0.00]
+  },
+  growth: {
+    use_cagr: [0.15, 0.20, 0.00, 0.15, 0.05, 0.05, 0.20, 0.20],
+    no_cagr:  [0.50, 0.00, 0.00, 0.20, 0.15, 0.15, 0.00, 0.00]
+  }
+};
+
 function getStatusEl() {
   return document.getElementById('status');
 }
@@ -53,7 +69,10 @@ function renderWeightRows(containerId, mode, weights) {
     const row = document.createElement('label');
     row.className = 'flex items-center justify-between gap-2 text-[11px] text-slate-300';
     row.innerHTML = `
-      <span>${idx + 1}. ${name}</span>
+      <span class="flex items-center gap-1">
+        ${idx + 1}. ${name}
+        <span data-tooltip="${name}" class="text-[9px] opacity-30 cursor-help">ⓘ</span>
+      </span>
       <input
         type="number"
         step="any"
@@ -155,9 +174,11 @@ async function loadConfig() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
     fillForm(json);
+    if (window.showToast) window.showToast('Config berhasil dimuat.', 'success');
     setStatus('Config berhasil dimuat.', 'ok');
   } catch (err) {
     fillForm(DEFAULT_CONFIG);
+    if (window.showToast) window.showToast('Gagal memuat config API.', 'error');
     setStatus(`Gagal memuat config API, pakai default. (${String(err)})`, 'error');
   }
 }
@@ -180,8 +201,10 @@ async function saveConfig() {
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     await res.json();
+    if (window.showToast) window.showToast('Configuration Saved!', 'success');
     setStatus('Config berhasil disimpan.', 'ok');
   } catch (err) {
+    if (window.showToast) window.showToast(`Error: ${err.message}`, 'error');
     setStatus(`Gagal simpan config: ${String(err)}`, 'error');
   }
 }
@@ -209,6 +232,36 @@ function init() {
       saveConfig();
     });
   }
+
+  const applyPreset = (presetName, label) => {
+    const p = PRESETS[presetName];
+    if (!p) return;
+    
+    // Set into inputs directly so users can see immediately
+    const setWeights = (mode, wArray) => {
+      const inputs = Array.from(document.querySelectorAll(`input[data-mode="${mode}"]`));
+      inputs.forEach((input, i) => {
+        if (wArray[i] !== undefined) {
+          input.value = wArray[i];
+        }
+      });
+      updateSum(mode);
+    };
+
+    setWeights('use_cagr', p.use_cagr);
+    setWeights('no_cagr', p.no_cagr);
+
+    setStatus(`Preset ${label} diterapkan (belum tersimpan).`, 'ok');
+  };
+
+  const btnDiv = document.getElementById('preset-dividend-btn');
+  if (btnDiv) btnDiv.addEventListener('click', () => applyPreset('dividend', 'Dividend Chaser'));
+
+  const btnVal = document.getElementById('preset-value-btn');
+  if (btnVal) btnVal.addEventListener('click', () => applyPreset('value', 'Value Champion'));
+
+  const btnGrp = document.getElementById('preset-growth-btn');
+  if (btnGrp) btnGrp.addEventListener('click', () => applyPreset('growth', 'Growth Aggressive'));
 
   loadConfig();
 }

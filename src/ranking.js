@@ -1,5 +1,6 @@
-import './index.css';
 import { initNavbar } from './navbar.js';
+import { toast } from './utils/toast.js';
+import { tooltips } from './utils/tooltip.js';
 initNavbar();
 
 let rankingPayload = null;

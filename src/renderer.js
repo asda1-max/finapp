@@ -1,5 +1,6 @@
-import './index.css';
 import { initNavbar } from './navbar.js';
+import { toast } from './utils/toast.js';
+import { tooltips } from './utils/tooltip.js';
 initNavbar();
 
 const searchedTickers = new Set();
@@ -245,7 +246,10 @@ function buildCardHtml(ticker, s) {
           <span class="font-medium">${bvp}</span>
         </div>
         <div class="flex justify-between gap-2">
-          <span class="text-slate-400">ROE</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            ROE
+            <span data-tooltip="ROE" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-medium">${roe}</span>
         </div>
         <div class="flex justify-between gap-2">
@@ -253,15 +257,24 @@ function buildCardHtml(ticker, s) {
           <span class="font-medium">${graham}</span>
         </div>
         <div class="flex justify-between gap-2">
-          <span class="text-slate-400">MOS</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            MOS
+            <span data-tooltip="MOS" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-medium">${mos}</span>
         </div>
         <div class="flex justify-between gap-2">
-          <span class="text-slate-400">PBV</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            PBV
+            <span data-tooltip="PBV" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-medium">${pbv}</span>
         </div>
         <div class="flex justify-between gap-2">
-          <span class="text-slate-400">Dividend Yield</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            Dividend Yield
+            <span data-tooltip="Dividend Yield" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-medium">${divYield}</span>
         </div>
         <div class="flex justify-between gap-2">
@@ -382,63 +395,66 @@ function setDashboardViewMode(mode) {
   }
 }
 
+// Logic sorting & filter
+let currentSort = 'score-desc';
+let currentSectorFilter = 'all';
+
 function renderDashboardCards() {
-  const cardsEl = document.getElementById('stocks-cards');
-  if (!cardsEl) return;
+  const grid = document.getElementById('stocks-cards'); // Changed to stocks-cards as per original HTML
+  if (!grid) return;
 
-  const mode = getDashboardViewMode();
   const entries = Array.from(tickerCache.entries());
-  cardsEl.innerHTML = '';
-
   if (entries.length === 0) {
+    grid.innerHTML = `
+      <div class="col-span-full py-20 text-center">
+        <div class="text-4xl mb-4">🔍</div>
+        <p class="text-slate-500">Belum ada saham yang ditambahkan.</p>
+      </div>
+    `;
     return;
   }
 
-  if (mode !== 'sector') {
-    for (const [ticker, payload] of entries) {
-      const html = buildCardHtml(ticker, payload.stock);
-      cardsEl.insertAdjacentHTML('beforeend', html);
-    }
-    return;
-  }
-
-  const groups = new Map();
-  for (const [ticker, payload] of entries) {
+  // Populate Sector Filter if needed
+  const sectors = new Set(['all']);
+  entries.forEach(([_, payload]) => {
     const sector = normalizeSectorLabel(payload.stock?.Sector);
-    if (!groups.has(sector)) groups.set(sector, []);
-    groups.get(sector).push({ ticker, payload });
+    if (sector) sectors.add(sector);
+  });
+  
+  const filterEl = document.getElementById('filter-sector');
+  if (filterEl && filterEl.options.length <= 1) { // Only populate if not already populated (or only has 'all')
+    const sortedSectors = Array.from(sectors).sort((a, b) => {
+      if (a === 'all') return -1; // 'all' always first
+      if (b === 'all') return 1;
+      return a.localeCompare(b);
+    });
+    filterEl.innerHTML = sortedSectors.map(sec => 
+      `<option value="${sec}">${sec === 'all' ? 'Semua Sektor' : sec}</option>`
+    ).join('');
+    filterEl.value = currentSectorFilter;
   }
 
-  const sectors = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b));
-  for (let i = 0; i < sectors.length; i += 1) {
-    const sector = sectors[i];
-    const wrapper = document.createElement('section');
-    wrapper.className = `col-span-full space-y-3 ${i > 0 ? 'mt-6' : ''}`;
+  // Filter
+  let filtered = entries;
+  if (currentSectorFilter !== 'all') {
+    filtered = entries.filter(([_, payload]) => normalizeSectorLabel(payload.stock?.Sector) === currentSectorFilter);
+  }
 
-    const title = document.createElement('h3');
-    title.className = 'text-center text-xs font-semibold uppercase tracking-wide text-sky-300';
-    title.textContent = `-- ${sector} --`;
-    wrapper.appendChild(title);
-
-    const grid = document.createElement('div');
-    grid.className = 'mx-auto grid justify-items-center gap-3 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
-
-    const rows = groups.get(sector) || [];
-    for (const row of rows) {
-      const html = buildCardHtml(row.ticker, row.payload.stock);
-      const cardWrap = document.createElement('div');
-      cardWrap.className = 'w-full max-w-sm';
-      cardWrap.innerHTML = html.trim();
-      const article = cardWrap.querySelector('article');
-      if (article) {
-        article.classList.add('w-full');
-      }
-      grid.appendChild(cardWrap);
+  // Sort
+  filtered.sort((a, b) => {
+    const sA = a[1].stock;
+    const sB = b[1].stock;
+    switch (currentSort) {
+      case 'ticker-asc': return a[0].localeCompare(b[0]);
+      case 'score-desc': return (sB['Final Hybrid Score'] || 0) - (sA['Final Hybrid Score'] || 0);
+      case 'score-asc': return (sA['Final Hybrid Score'] || 0) - (sB['Final Hybrid Score'] || 0);
+      case 'yield-desc': return (sB['Dividend Yield (%)'] || 0) - (sA['Dividend Yield (%)'] || 0);
+      case 'mos-desc': return (sB['MOS (%)'] || 0) - (sA['MOS (%)'] || 0);
+      default: return 0;
     }
+  });
 
-    wrapper.appendChild(grid);
-    cardsEl.appendChild(wrapper);
-  }
+  grid.innerHTML = filtered.map(([ticker, payload]) => buildCardHtml(ticker, payload.stock)).join('');
 }
 
 async function loadSavedTickers() {
@@ -489,7 +505,12 @@ async function loadSavedTickers() {
     );
 
     if (terminalLoader) {
-      appendTerminalLog(`[SYSTEM] All tickers processed. Rendering dashboard...`, 'success');
+      const total = tickers.length;
+      updateTerminalProgress(total, total);
+      appendTerminalLog(`Selesai! Berhasil memproses ${total} saham.`, 'success');
+      if (window.showToast) window.showToast(`Update ${total} saham selesai.`, 'success');
+      
+      // UI feedback selesai
       setTimeout(() => {
         terminalLoader.classList.add('hidden');
         terminalLoader.classList.remove('flex');
@@ -647,6 +668,13 @@ function init() {
       tickerCache.clear();
       parsed.forEach(p => tickerCache.set(p[0], p[1]));
       renderDashboardCards();
+      // Save to Cache (Convert Map to Object for JSON)
+    const cacheObj = {};
+    tickerCache.forEach((v, k) => { cacheObj[k] = v; });
+    sessionStorage.setItem('tickerCache', JSON.stringify(cacheObj));
+    sessionStorage.setItem('last_data_fetch', Date.now().toString());
+    sessionStorage.removeItem('force-refresh');
+
       const statusEl = document.getElementById('status');
       if (statusEl) statusEl.textContent = `Menampilkan ${tickerCache.size} saham (Cached). Klik Refresh untuk update.`;
     } catch(e) {
@@ -659,6 +687,22 @@ function init() {
 
   const input = document.getElementById('ticker-input');
   const button = document.getElementById('ticker-submit');
+  // Toolbar Init
+  const sortByEl = document.getElementById('sort-by');
+  if (sortByEl) {
+    sortByEl.addEventListener('change', (e) => {
+      currentSort = e.target.value;
+      renderDashboardCards();
+    });
+  }
+  const sectorFilterEl = document.getElementById('filter-sector');
+  if (sectorFilterEl) {
+    sectorFilterEl.addEventListener('change', (e) => {
+      currentSectorFilter = e.target.value;
+      renderDashboardCards();
+    });
+  }
+
   const refreshAllBtn = document.getElementById('refresh-all-btn');
   const resetAllBtn = document.getElementById('reset-all-btn');
   const resetModal = document.getElementById('reset-modal');

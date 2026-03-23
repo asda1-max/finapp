@@ -1,6 +1,8 @@
-import './index.css';
 import { initNavbar } from './navbar.js';
+import { toast } from './utils/toast.js';
 initNavbar();
+
+let lastData = null; // Cache for export
 
 let selectedProfile = 'balanced';
 
@@ -100,6 +102,40 @@ function renderResults(data) {
       }
     }
   }
+
+  lastData = data; // Save for export
+}
+
+function exportToCSV() {
+  if (!lastData || !lastData.allocations) {
+    if (window.showToast) window.showToast('Hitung alokasi dulu sebelum export.', 'warning');
+    return;
+  }
+
+  const headers = ['Ticker', 'Name', 'Bucket', 'Lots', 'Shares', 'Price', 'Allocated', 'Note'];
+  const rows = lastData.allocations.map(a => [
+    a.ticker,
+    `"${a.name}"`,
+    a.bucket,
+    a.lots,
+    a.shares,
+    a.price,
+    a.capital_allocated,
+    `"${a.note || ''}"`
+  ]);
+
+  const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `FinApp_Allocation_${new Date().toISOString().split('T')[0]}.csv`);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  
+  if (window.showToast) window.showToast('CSV Berhasil di-export!', 'success');
 }
 
 async function calculateAllocation() {
@@ -293,6 +329,12 @@ function init() {
   const calculateBtn = document.getElementById('calculate-btn');
   if (calculateBtn) {
     calculateBtn.addEventListener('click', calculateAllocation);
+  }
+
+  // Export button
+  const exportBtn = document.getElementById('export-csv-btn');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', exportToCSV);
   }
 
   // Enter on capital input
