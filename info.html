@@ -327,6 +327,131 @@
           </div>
         </div>
 
+        <!-- EPS CAGR Card -->
+        <div class="perspective-1000 w-full h-72 cursor-pointer group" onclick="flipCard(this)">
+          <div class="card-inner w-full h-full preserve-3d relative">
+            <div class="card-front absolute w-full h-full glass-card flex flex-col items-center justify-center p-6 text-center shadow-lg group-hover:border-sky-500/50 transition-colors">
+              <div class="w-12 h-12 mb-4 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 text-xl font-bold border border-blue-500/20">11</div>
+              <h3 class="text-2xl font-bold text-slate-100 tracking-tight mb-2">EPS CAGR</h3>
+              <p class="text-sm text-slate-400 font-medium t-epscagr-name">Earnings Growth Rate</p>
+              <div class="mt-4 text-[10px] uppercase tracking-wider text-sky-400/80 font-semibold flex items-center gap-1">
+                <span class="t-click-flip">Click to flip</span>
+                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              </div>
+            </div>
+            <div class="card-back absolute w-full h-full rotate-y-180 p-6 flex flex-col shadow-2xl overflow-hidden">
+              <h4 class="text-sm font-bold text-sky-300 mb-2 t-formula-label uppercase tracking-widest">Formula</h4>
+              <div class="bg-slate-950/80 rounded border border-slate-700/50 p-2 mb-4 text-center">
+                <code class="text-[10px] text-slate-300 font-mono">((End EPS / Start EPS)^(1/n)) - 1</code>
+              </div>
+              <h4 class="text-sm font-bold text-emerald-300 mb-1 t-importance-label uppercase tracking-widest">Why it matters</h4>
+              <p class="text-[11px] text-slate-300 leading-relaxed overflow-y-auto custom-scrollbar pr-1 t-epscagr-desc">
+                Measures the smoothed annual growth rate of a company's profits per share. FinApp uses this to validate if a stock's 'cheapness' is backed by real earnings expansion.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Revenue CAGR Card -->
+        <div class="perspective-1000 w-full h-72 cursor-pointer group" onclick="flipCard(this)">
+          <div class="card-inner w-full h-full preserve-3d relative">
+            <div class="card-front absolute w-full h-full glass-card flex flex-col items-center justify-center p-6 text-center shadow-lg group-hover:border-sky-500/50 transition-colors">
+              <div class="w-12 h-12 mb-4 rounded-full bg-violet-500/10 flex items-center justify-center text-violet-400 text-xl font-bold border border-violet-500/20">12</div>
+              <h3 class="text-2xl font-bold text-slate-100 tracking-tight mb-2 text-balance leading-tight">Revenue<br>CAGR</h3>
+              <p class="text-sm text-slate-400 font-medium t-revcagr-name">Sales Growth Rate</p>
+              <div class="mt-4 text-[10px] uppercase tracking-wider text-sky-400/80 font-semibold flex items-center gap-1">
+                <span class="t-click-flip">Click to flip</span>
+                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              </div>
+            </div>
+            <div class="card-back absolute w-full h-full rotate-y-180 p-6 flex flex-col shadow-2xl overflow-hidden">
+              <h4 class="text-sm font-bold text-sky-300 mb-2 t-formula-label uppercase tracking-widest">Formula</h4>
+              <div class="bg-slate-950/80 rounded border border-slate-700/50 p-2 mb-4 text-center">
+                <code class="text-[10px] text-slate-300 font-mono">((End Rev / Start Rev)^(1/n)) - 1</code>
+              </div>
+              <h4 class="text-sm font-bold text-emerald-300 mb-1 t-importance-label uppercase tracking-widest">Why it matters</h4>
+              <p class="text-[11px] text-slate-300 leading-relaxed overflow-y-auto custom-scrollbar pr-1 t-revcagr-desc">
+                Indicates how fast the company is expanding its top-line sales. Essential for identifying Growth-tier stocks and confirming the scalability of the business model.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Net Income CAGR Card -->
+        <div class="perspective-1000 w-full h-72 cursor-pointer group" onclick="flipCard(this)">
+          <div class="card-inner w-full h-full preserve-3d relative">
+            <div class="card-front absolute w-full h-full glass-card flex flex-col items-center justify-center p-6 text-center shadow-lg group-hover:border-sky-500/50 transition-colors">
+              <div class="w-12 h-12 mb-4 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 text-xl font-bold border border-emerald-500/20">13</div>
+              <h3 class="text-2xl font-bold text-slate-100 tracking-tight mb-2 text-balance leading-tight">Net Income<br>CAGR</h3>
+              <p class="text-sm text-slate-400 font-medium t-nicagr-name">Profit Growth Rate</p>
+              <div class="mt-4 text-[10px] uppercase tracking-wider text-sky-400/80 font-semibold flex items-center gap-1">
+                <span class="t-click-flip">Click to flip</span>
+                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              </div>
+            </div>
+            <div class="card-back absolute w-full h-full rotate-y-180 p-6 flex flex-col shadow-2xl overflow-hidden">
+              <h4 class="text-sm font-bold text-sky-300 mb-2 t-formula-label uppercase tracking-widest">Formula</h4>
+              <div class="bg-slate-950/80 rounded border border-slate-700/50 p-2 mb-4 text-center">
+                <code class="text-[10px] text-slate-300 font-mono">((End NI / Start NI)^(1/n)) - 1</code>
+              </div>
+              <h4 class="text-sm font-bold text-emerald-300 mb-1 t-importance-label uppercase tracking-widest">Why it matters</h4>
+              <p class="text-[11px] text-slate-300 leading-relaxed overflow-y-auto custom-scrollbar pr-1 t-nicagr-desc">
+                The most direct measure of long-term profit trajectory. FinApp compares this with EPS CAGR to detect share dilution from excessive stock issuance.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Current Ratio Card -->
+        <div class="perspective-1000 w-full h-72 cursor-pointer group" onclick="flipCard(this)">
+          <div class="card-inner w-full h-full preserve-3d relative">
+            <div class="card-front absolute w-full h-full glass-card flex flex-col items-center justify-center p-6 text-center shadow-lg group-hover:border-sky-500/50 transition-colors">
+              <div class="w-12 h-12 mb-4 rounded-full bg-rose-500/10 flex items-center justify-center text-rose-400 text-xl font-bold border border-rose-500/20">14</div>
+              <h3 class="text-2xl font-bold text-slate-100 tracking-tight mb-2">Current Ratio</h3>
+              <p class="text-sm text-slate-400 font-medium t-current-name">Liquidity Indicator</p>
+              <div class="mt-4 text-[10px] uppercase tracking-wider text-sky-400/80 font-semibold flex items-center gap-1">
+                <span class="t-click-flip">Click to flip</span>
+                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              </div>
+            </div>
+            <div class="card-back absolute w-full h-full rotate-y-180 p-6 flex flex-col shadow-2xl overflow-hidden">
+              <h4 class="text-sm font-bold text-sky-300 mb-2 t-formula-label uppercase tracking-widest">Formula</h4>
+              <div class="bg-slate-950/80 rounded border border-slate-700/50 p-2 mb-4 text-center">
+                <code class="text-[10px] text-slate-300 font-mono">Current Assets / Current Liabilities</code>
+              </div>
+              <h4 class="text-sm font-bold text-emerald-300 mb-1 t-importance-label uppercase tracking-widest">Why it matters</h4>
+              <p class="text-[11px] text-slate-300 leading-relaxed overflow-y-auto custom-scrollbar pr-1 t-current-desc">
+                Measures a company's ability to pay off its short-term debts. A ratio &lt; 1.0 is a red flag. FinApp’s Safety Gate uses this to identify potential liquidity crises before they happen.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Operating Margin Card -->
+        <div class="perspective-1000 w-full h-72 cursor-pointer group" onclick="flipCard(this)">
+          <div class="card-inner w-full h-full preserve-3d relative">
+            <div class="card-front absolute w-full h-full glass-card flex flex-col items-center justify-center p-6 text-center shadow-lg group-hover:border-sky-500/50 transition-colors">
+              <div class="w-12 h-12 mb-4 rounded-full bg-cyan-500/10 flex items-center justify-center text-cyan-400 text-xl font-bold border border-cyan-500/20">15</div>
+              <h3 class="text-2xl font-bold text-slate-100 tracking-tight mb-2 text-balance leading-tight">Operating<br>Margin</h3>
+              <p class="text-sm text-slate-400 font-medium t-opmargin-name">Operational Efficiency</p>
+              <div class="mt-4 text-[10px] uppercase tracking-wider text-sky-400/80 font-semibold flex items-center gap-1">
+                <span class="t-click-flip">Click to flip</span>
+                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              </div>
+            </div>
+            <div class="card-back absolute w-full h-full rotate-y-180 p-6 flex flex-col shadow-2xl overflow-hidden">
+              <h4 class="text-sm font-bold text-sky-300 mb-2 t-formula-label uppercase tracking-widest">Formula</h4>
+              <div class="bg-slate-950/80 rounded border border-slate-700/50 p-2 mb-4 text-center">
+                <code class="text-[10px] text-slate-300 font-mono">Operating Income / Net Sales</code>
+              </div>
+              <h4 class="text-sm font-bold text-emerald-300 mb-1 t-importance-label uppercase tracking-widest">Why it matters</h4>
+              <p class="text-[11px] text-slate-300 leading-relaxed overflow-y-auto custom-scrollbar pr-1 t-opmargin-desc">
+                Shows how much profit a company makes on a Rp of sales after paying for variable costs. High margins indicate strong pricing power and operational efficiency.
+              </p>
+            </div>
+          </div>
+        </div>
+
       </section>
 
       <!-- Strategy & Concepts Section -->
@@ -547,6 +672,21 @@
           dprName: "Dividend Payout Ratio",
           dprDesc: "The proportion of earnings paid out as dividends. FinApp penalizes ratios > 85% as 'unsafe' unless offset by aggressive historical dividend growth, protecting the Yield Score.",
           
+          epscagrName: "Earnings Growth Rate",
+          epscagrDesc: "Measures the smoothed annual growth rate of a company's profits per share. FinApp uses this to validate if a stock's 'cheapness' is backed by real earnings expansion.",
+          
+          revcagrName: "Sales Growth Rate",
+          revcagrDesc: "Indicates how fast the company is expanding its top-line sales. Essential for identifying Growth-tier stocks and confirming the scalability of the business model.",
+          
+          nicagrName: "Profit Growth Rate",
+          nicagrDesc: "The most direct measure of long-term profit trajectory. FinApp compares this with EPS CAGR to detect share dilution from excessive stock issuance.",
+          
+          currentName: "Liquidity Indicator",
+          currentDesc: "Measures a company's ability to pay off its short-term debts. A ratio < 1.0 is a red flag. FinApp’s Safety Gate uses this to identify potential liquidity crises.",
+          
+          opmarginName: "Operational Efficiency",
+          opmarginDesc: "Shows how much profit a company makes on a Rp of sales after paying for variable costs. High margins indicate strong pricing power and operational efficiency.",
+
           calcTitle: "Quick Ratio Calculator",
           calcPrice: "Stock Price (Rp)",
           calcEps: "EPS (Earnings per Share)",
@@ -610,7 +750,22 @@
           
           dprName: "Rasio Pembayaran Dividen",
           dprDesc: "Proporsi laba yang dibayarkan sebagai dividen. FinApp memberikan penalti untuk rasio > 85% karena dianggap 'tidak aman' kecuali diimbangi oleh pertumbuhan dividen historis yang agresif.",
+
+          epscagrName: "Laju Pertumbuhan Laba (EPS)",
+          epscagrDesc: "Mengukur tingkat pertumbuhan tahunan rata-rata laba per saham perusahaan. FinApp menggunakan ini untuk memvalidasi apakah 'kemurahan' saham didukung oleh ekspansi laba nyata.",
           
+          revcagrName: "Laju Pertumbuhan Pendapatan",
+          revcagrDesc: "Menunjukkan seberapa cepat perusahaan memperluas penjualan atasnya. Penting untuk mengidentifikasi saham lapis Growth dan mengonfirmasi skalabilitas model bisnis.",
+          
+          nicagrName: "Laju Pertumbuhan Laba Bersih",
+          nicagrDesc: "Ukuran paling langsung dari lintasan laba jangka panjang. FinApp membandingkan ini dengan EPS CAGR untuk mendeteksi dilusi saham dari penerbitan saham yang berlebihan.",
+          
+          currentName: "Indikator Likuiditas",
+          currentDesc: "Mengukur kemampuan perusahaan untuk melunasi hutang jangka pendeknya. Rasio < 1.0 adalah tanda peringatan. Gerbang Keselamatan FinApp menggunakan ini untuk deteksi krisis likuiditas.",
+          
+          opmarginName: "Efisiensi Operasional",
+          opmarginDesc: "Menunjukkan berapa banyak keuntungan yang dihasilkan perusahaan dari setiap Rp penjualan setelah membayar biaya variabel. Margin tinggi menunjukkan efisiensi operasional.",
+
           calcTitle: "Kalkulator Rasio Cepat",
           calcPrice: "Harga Saham (Rp)",
           calcEps: "EPS (Laba per Saham)",
@@ -700,6 +855,16 @@
         transitionText('.t-discount-desc', dict.discountDesc);
         transitionText('.t-dpr-name', dict.dprName);
         transitionText('.t-dpr-desc', dict.dprDesc);
+        transitionText('.t-epscagr-name', dict.epscagrName);
+        transitionText('.t-epscagr-desc', dict.epscagrDesc);
+        transitionText('.t-revcagr-name', dict.revcagrName);
+        transitionText('.t-revcagr-desc', dict.revcagrDesc);
+        transitionText('.t-nicagr-name', dict.nicagrName);
+        transitionText('.t-nicagr-desc', dict.nicagrDesc);
+        transitionText('.t-current-name', dict.currentName);
+        transitionText('.t-current-desc', dict.currentDesc);
+        transitionText('.t-opmargin-name', dict.opmarginName);
+        transitionText('.t-opmargin-desc', dict.opmarginDesc);
 
         transitionText('.t-calc-title', dict.calcTitle);
         transitionText('.t-calc-price', dict.calcPrice);
@@ -773,6 +938,7 @@
           .t-roe-name, .t-roe-desc, .t-per-name, .t-per-desc, .t-pbv-name, .t-pbv-desc,
           .t-der-name, .t-der-desc, .t-macd-name, .t-macd-desc, .t-rsi-name, .t-rsi-desc,
           .t-mos-name, .t-mos-desc, .t-quality-name, .t-quality-desc, .t-discount-name, .t-discount-desc, .t-dpr-name, .t-dpr-desc,
+          .t-epscagr-name, .t-epscagr-desc, .t-revcagr-name, .t-revcagr-desc, .t-nicagr-name, .t-nicagr-desc, .t-current-name, .t-current-desc, .t-opmargin-name, .t-opmargin-desc,
           .t-calc-title, .t-calc-price, .t-calc-eps, .t-calc-bvps, .t-calc-results, .t-calc-per-desc, .t-calc-pbv-desc,
           .t-strat-title, .t-strat-desc, .t-sectors-name, .t-sectors-desc, .t-risk-name, .t-risk-desc,
           .t-bluechip-name, .t-bluechip-desc, .t-divchaser-name, .t-divchaser-desc, .t-experimental-name, .t-experimental-desc {

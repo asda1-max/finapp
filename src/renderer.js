@@ -190,43 +190,73 @@ function buildCardHtml(ticker, s) {
       </header>
       <div class="space-y-1.5 text-[11px] text-slate-300">
         <div class="flex justify-between gap-2">
-          <span class="text-slate-400">Price</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            Price
+            <span data-tooltip="Price" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-medium">${price}</span>
         </div>
         <div class="flex justify-between gap-2">
-          <span class="text-slate-400">Revenue Annual (Prev)</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            Revenue Annual (Prev)
+            <span data-tooltip="Revenue Annual (Prev)" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-medium">${revenue}</span>
         </div>
         <div class="flex justify-between gap-2">
-          <span class="text-slate-400">EPS NOW</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            EPS NOW
+            <span data-tooltip="EPS NOW" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-medium">${eps}</span>
         </div>
         <div class="flex justify-between gap-2">
-          <span class="text-slate-400">PER NOW</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            PER NOW
+            <span data-tooltip="PER" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-medium">${per}</span>
         </div>
         <div class="flex justify-between gap-2">
-          <span class="text-slate-400">HIGH 52</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            HIGH 52
+            <span data-tooltip="HIGH 52" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-medium">${high52}</span>
         </div>
         <div class="flex justify-between gap-2">
-          <span class="text-slate-400">LOW 52</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            LOW 52
+            <span data-tooltip="LOW 52" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-medium">${low52}</span>
         </div>
         <div class="flex justify-between gap-2">
-          <span class="text-slate-400">Shares</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            Shares
+            <span data-tooltip="Shares" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-medium">${shares}</span>
         </div>
         <div class="flex justify-between gap-2">
-          <span class="text-slate-400">Market Cap</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            Market Cap
+            <span data-tooltip="Market Cap" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-medium">${marketCap}</span>
         </div>
         <div class="flex justify-between gap-2">
-          <span class="text-slate-400">Down From High 52</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            Down From High 52
+            <span data-tooltip="Down From High 52" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-medium">${downFromHigh}</span>
         </div>
         <div class="flex justify-between gap-2">
-          <span class="text-slate-400">Down From This Month</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            Down From This Month
+            <span data-tooltip="Down From This Month" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-medium">${downFromMonth}</span>
         </div>
         <div class="flex justify-between gap-2">
@@ -242,7 +272,10 @@ function buildCardHtml(ticker, s) {
           <span class="font-medium">${riseFromLow}</span>
         </div>
         <div class="flex justify-between gap-2">
-          <span class="text-slate-400">BVP Per S</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            BVP Per S
+            <span data-tooltip="BVP Per S" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-medium">${bvp}</span>
         </div>
         <div class="flex justify-between gap-2">
@@ -253,7 +286,10 @@ function buildCardHtml(ticker, s) {
           <span class="font-medium">${roe}</span>
         </div>
         <div class="flex justify-between gap-2">
-          <span class="text-slate-400">Graham Number</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            Graham Number
+            <span data-tooltip="Graham Number" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-medium">${graham}</span>
         </div>
         <div class="flex justify-between gap-2">
@@ -278,29 +314,47 @@ function buildCardHtml(ticker, s) {
           <span class="font-medium">${divYield}</span>
         </div>
         <div class="flex justify-between gap-2">
-          <span class="text-slate-400">Dividend Growth</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            Dividend Growth
+            <span data-tooltip="Dividend Growth" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-medium">${divGrowth}</span>
         </div>
         <div class="flex justify-between gap-2">
-          <span class="text-slate-400">Payout Ratio</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            Payout Ratio
+            <span data-tooltip="Payout Ratio" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-medium">${payoutRatio}</span>
         </div>
         <div class="flex justify-between gap-2">
-          <span class="text-slate-400">Payout Penalty</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            Payout Penalty
+            <span data-tooltip="Payout Penalty" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-medium">${payoutPenalty}</span>
         </div>
         ${safetyBadgeHtml}
         <div class="divider-gradient my-2"></div>
         <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400">Base Signal (Hybrid)</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            Base Signal (Hybrid)
+            <span data-tooltip="Base Signal" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-semibold ${buyDecision === 'BUY' ? 'text-emerald-400' : 'text-slate-400'}">${buyDecision}</span>
         </div>
         <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400">Final Signal (Detailed)</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            Final Signal (Detailed)
+            <span data-tooltip="Final Signal" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-semibold ${finalDecision === 'BUY' ? 'text-emerald-300' : 'text-slate-400'}">${finalDecision}</span>
         </div>
         <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400">Final Execution</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            Final Execution
+            <span data-tooltip="Final Execution" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-semibold ${
             executionDecision === 'BUY'
               ? 'text-emerald-300'
@@ -311,11 +365,17 @@ function buildCardHtml(ticker, s) {
         </div>
         <div class="divider-gradient my-1.5"></div>
         <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400">Base Score</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            Base Score
+            <span data-tooltip="Discount Score" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-medium text-cyan-300">${hybridScore}</span>
         </div>
         <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400">Final Score</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            Final Score
+            <span data-tooltip="Discount Score" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-medium text-emerald-300">${finalHybridScore}</span>
         </div>
         <div class="flex justify-between gap-2 text-[10px]">
@@ -323,23 +383,17 @@ function buildCardHtml(ticker, s) {
           <span class="font-medium text-emerald-300">${finalHybridCategory}</span>
         </div>
         <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400">Final Mode</span>
-          <span class="font-medium text-slate-300">${finalHybridMode}</span>
-        </div>
-        <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400">CAGR Applied</span>
-          <span class="font-medium ${cagrApplied === 'Yes' ? 'text-emerald-300' : 'text-amber-300'}">${cagrApplied}</span>
-        </div>
-        <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400">CAGR Source</span>
-          <span class="font-medium text-slate-300">${cagrSource}</span>
-        </div>
-        <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400">Quality Score</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            Quality Score
+            <span data-tooltip="Quality Score" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-medium text-cyan-300">${qualityScore}</span>
         </div>
         <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400">Quality Label</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            Quality Label
+            <span data-tooltip="Quality Label" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-medium text-emerald-300">${qualityLabel}</span>
         </div>
         <div class="flex justify-between gap-2 text-[10px]">
@@ -347,7 +401,10 @@ function buildCardHtml(ticker, s) {
           <span class="font-medium text-amber-300">${qualityVerdict}</span>
         </div>
         <div class="flex justify-between gap-2 text-[10px]">
-          <span class="text-slate-400">Safety Check</span>
+          <span class="text-slate-400 flex items-center gap-1">
+            Safety Check
+            <span data-tooltip="Safety Check" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
+          </span>
           <span class="font-medium text-amber-300">${safetyCheck}</span>
         </div>
         <div class="divider-gradient my-1.5"></div>
