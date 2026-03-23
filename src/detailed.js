@@ -331,20 +331,6 @@ function renderMcdmResult(ticker, methods) {
         <span>${m.signalLabel}</span>
         <span class="${m.color}">${score != null ? score.toFixed(3) : '-'}</span>
       </div>
-      <div class="flex flex-col gap-1">
-        <span class="text-[10px] text-slate-500 uppercase flex items-center gap-1">
-          PBV Score
-          <span data-tooltip="PBV" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-        </span>
-        <span class="text-xs font-bold text-slate-200">${Number(info['PBV Score'] || 0).toFixed(2)}</span>
-      </div>
-      <div class="flex flex-col gap-1">
-        <span class="text-[10px] text-slate-500 uppercase flex items-center gap-1">
-          MOS
-          <span data-tooltip="MOS" class="text-[8px] opacity-40 cursor-help">ⓘ</span>
-        </span>
-        <span class="text-xs font-bold text-emerald-400">${formatPercent(info['MOS (%)'])}</span>
-      </div>
       ${
         m.useFinalDecision
           ? `<div class="mt-1 flex justify-between text-[10px] text-slate-400"><span>Tier</span><span class="text-emerald-300">${category}</span></div>`
