@@ -45,7 +45,7 @@ export function initNavbar() {
   navbar.innerHTML = `
     <div class="mx-auto max-w-screen-2xl flex items-center justify-between px-4 py-2.5 gap-4">
       <div class="flex items-center gap-6 flex-shrink-0">
-        <a href="/index.html" class="flex items-center gap-2.5 group">
+        <a href="index.html" class="flex items-center gap-2.5 group">
           <div class="relative flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-sky-500/20 to-violet-500/20 border border-sky-500/20 group-hover:border-sky-400/40 transition-all duration-300">
             <svg class="w-4 h-4 text-sky-400 group-hover:text-sky-300 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>

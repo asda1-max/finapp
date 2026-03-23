@@ -1,7 +1,7 @@
 {
   "name": "finapp",
   "productName": "finapp",
-  "version": "1.0.2.1",
+  "version": "1.0.2",
   "description": "My Electron application description",
   "main": ".vite/build/main.js",
   "private": true,
