@@ -674,7 +674,7 @@ async function loadSingleTicker(tickerRaw, options = {}) {
     if (!silent) statusEl.textContent = `Memuat data untuk ${ticker}...`;
 
     const url = `http://127.0.0.1:8000/stocks?tickers=${encodeURIComponent(ticker)}`;
-    const response = await fetch(url);
+    const response = await fetch(url, { cache: 'no-store' });
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
@@ -728,7 +728,7 @@ async function loadSingleTicker(tickerRaw, options = {}) {
           // Re-fetch stock data so scores include CAGR
           if (autoRes.ok) {
             try {
-              const refreshRes = await fetch(`http://127.0.0.1:8000/stocks?tickers=${encodeURIComponent(ticker)}`);
+              const refreshRes = await fetch(`http://127.0.0.1:8000/stocks?tickers=${encodeURIComponent(ticker)}`, { cache: 'no-store' });
               if (refreshRes.ok) {
                 const refreshData = await refreshRes.json();
                 if (Array.isArray(refreshData) && refreshData.length > 0) {
@@ -742,7 +742,7 @@ async function loadSingleTicker(tickerRaw, options = {}) {
           // (e.g. auto_live extraction failed). Re-fetch to ensure scores include CAGR.
           if (s['CAGR Applied'] !== true) {
             try {
-              const refreshRes = await fetch(`http://127.0.0.1:8000/stocks?tickers=${encodeURIComponent(ticker)}`);
+              const refreshRes = await fetch(`http://127.0.0.1:8000/stocks?tickers=${encodeURIComponent(ticker)}`, { cache: 'no-store' });
               if (refreshRes.ok) {
                 const refreshData = await refreshRes.json();
                 if (Array.isArray(refreshData) && refreshData.length > 0) {

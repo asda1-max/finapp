@@ -39,8 +39,14 @@ def _normalize_percent_value(raw_value):
 def _normalize_debt_to_equity_value(raw_value):
     """Normalisasi Debt to Equity agar konsisten dalam persen.
 
-    - Jika input kecil (mis. 1.2), anggap rasio dan ubah jadi 120.
-    - Jika sudah besar (mis. 180), biarkan apa adanya.
+        Catatan bugfix:
+        - Nilai seperti 3.69 dari provider sering sudah berarti 3.69%.
+            Jadi JANGAN diubah jadi 369.
+
+        Aturan:
+        - Jika nilai benar-benar fraksional (<= 1), anggap rasio dan ubah ke persen.
+            Contoh: 0.8 -> 80.
+        - Di atas itu, biarkan apa adanya (sudah persen).
     """
 
     if raw_value is None:
@@ -53,9 +59,65 @@ def _normalize_debt_to_equity_value(raw_value):
     if not np.isfinite(val):
         return None
 
-    if val != 0 and abs(val) <= 5:
+    if val != 0 and abs(val) <= 1:
         return val * 100.0
     return val
+
+
+def _estimate_debt_to_equity_from_balance_sheet(stock):
+    """Fallback estimasi D/E (%) dari balance sheet jika info.debtToEquity kosong."""
+
+    try:
+        bs = stock.balance_sheet
+    except Exception:
+        return None
+
+    if bs is None:
+        return None
+    try:
+        if bs.empty:
+            return None
+    except Exception:
+        return None
+
+    def _get_latest_row_value(candidates):
+        for name in candidates:
+            if name not in bs.index:
+                continue
+            try:
+                row = pd.to_numeric(bs.loc[name], errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
+                if row.empty:
+                    continue
+                return float(row.iloc[0])
+            except Exception:
+                continue
+        return None
+
+    debt_val = _get_latest_row_value([
+        "Total Debt",
+        "TotalDebt",
+        "Long Term Debt",
+        "LongTermDebt",
+        "Total Liabilities Net Minority Interest",
+        "Total Liabilities",
+    ])
+
+    equity_val = _get_latest_row_value([
+        "Stockholders Equity",
+        "Total Stockholder Equity",
+        "Total Equity Gross Minority Interest",
+        "Total Equity",
+        "Common Stock Equity",
+    ])
+
+    if debt_val is None or equity_val is None:
+        return None
+    if not np.isfinite(debt_val) or not np.isfinite(equity_val):
+        return None
+    if equity_val <= 0:
+        return None
+
+    return float((debt_val / equity_val) * 100.0)
 
 
 def _compute_quality_profile(*, info: dict, roe_pct: float, market_cap: float) -> dict:
@@ -955,11 +1017,11 @@ def _apply_payout_ratio_safety_check(df: pd.DataFrame) -> pd.DataFrame:
                 # If critically leveraged (D/E > 200% AND weak liquidity CR < 1.0)
                 if de_pct > 200.0 and cur_ratio < 1.0:
                     df.at[idx, "Execution Decision"] = "HOLD"
-                    df.at[idx, "Safety Check"] = f"[SOLVENCY HOLD] D/E {de_pct:.0f}% & CR {cur_ratio:.2f}. " + current_note
+                    df.at[idx, "Safety Check"] = f"[SOLVENCY HOLD] D/E {de_pct / 100:.2f}x & CR {cur_ratio:.2f}. " + current_note
                 # If insanely leveraged (D/E > 350%) -> Toxic debt trap
                 elif de_pct > 350.0:
                     df.at[idx, "Execution Decision"] = "NO BUY"
-                    df.at[idx, "Safety Check"] = f"[DANGER NO BUY] Toxic Debt: D/E {de_pct:.0f}%. " + current_note
+                    df.at[idx, "Safety Check"] = f"[DANGER NO BUY] Toxic Debt: D/E {de_pct / 100:.2f}x. " + current_note
 
     return df
 
@@ -1007,7 +1069,15 @@ def get_stock_data(ticker_list):
 
         auto_cagr_net, auto_cagr_rev, auto_cagr_eps, auto_cagr_has = _extract_auto_cagr_from_stock(stock)
 
-        quality = _compute_quality_profile(info=info, roe_pct=roe, market_cap=float(market_cap or 0.0))
+        quality_info = dict(info) if isinstance(info, dict) else {}
+        de_info_raw = quality_info.get('debtToEquity')
+        de_info_num = _normalize_debt_to_equity_value(de_info_raw)
+        if de_info_num is None or not np.isfinite(de_info_num):
+            de_fallback = _estimate_debt_to_equity_from_balance_sheet(stock)
+            if de_fallback is not None and np.isfinite(de_fallback):
+                quality_info['debtToEquity'] = float(de_fallback)
+
+        quality = _compute_quality_profile(info=quality_info, roe_pct=roe, market_cap=float(market_cap or 0.0))
 
         # Fallback: beberapa ticker tidak mengisi `dividendGrowth` secara konsisten
         # di `info`, jadi hitung estimasi growth dari histori dividen 5 tahun.

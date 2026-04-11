@@ -115,6 +115,14 @@ const DICTIONARY = {
   'Timing Verdict': {
     id: 'Analisis Waktu: Menilai apakah harga saat ini sudah cukup diskon untuk masuk.',
     en: 'Timing Analysis: Assesses if the current price is discounted enough for entry.'
+  },
+  'Debt To Equity': {
+    id: 'Rasio Utang terhadap Ekuitas: Mengukur proporsi utang dibanding modal sendiri. D/E < 1x artinya utang lebih kecil dari ekuitas.',
+    en: 'Debt to Equity Ratio: Measures the proportion of debt to shareholders\' equity. D/E < 1x means debt is less than equity.'
+  },
+  'Current Ratio': {
+    id: 'Rasio Lancar: Kemampuan perusahaan membayar kewajiban jangka pendek. Idealnya > 1.5x.',
+    en: 'Current Ratio: A company\'s ability to pay short-term obligations. Ideally above 1.5x.'
   }
 };
 

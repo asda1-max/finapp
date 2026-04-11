@@ -163,6 +163,9 @@ function renderFundamentals(ticker, stock) {
   const timingVerdictEl = document.getElementById('fund-timing-verdict');
   const qualityScoreEl = document.getElementById('fund-quality-score');
   const qualityLabelEl = document.getElementById('fund-quality-label');
+  const deRatioEl = document.getElementById('fund-de-ratio');
+  const currentRatioEl = document.getElementById('fund-current-ratio');
+  const npmEl = document.getElementById('fund-npm');
 
   const name = stock['Name'] ?? ticker;
   const price = formatNumber(stock['Price']);
@@ -255,6 +258,59 @@ function renderFundamentals(ticker, stock) {
   if (timingVerdictEl) timingVerdictEl.textContent = timingVerdict;
   if (qualityScoreEl) qualityScoreEl.textContent = qualityScore;
   if (qualityLabelEl) qualityLabelEl.textContent = qualityLabel;
+
+  // D/E disimpan sebagai persen; tampilkan persen agar tidak rancu konversi.
+  if (deRatioEl) {
+    const deRaw = stock['Debt To Equity (%)'];
+    if (deRaw != null && !Number.isNaN(Number(deRaw))) {
+      const dePct = Number(deRaw);
+      deRatioEl.textContent = `${dePct.toFixed(2)}%`;
+      // Color coding (persen): hijau < 100%, oranye 100-250%, merah > 250%
+      if (dePct > 250) {
+        deRatioEl.className = 'text-rose-400 font-bold';
+      } else if (dePct > 100) {
+        deRatioEl.className = 'text-orange-400 font-bold';
+      } else {
+        deRatioEl.className = 'text-emerald-400 font-medium';
+      }
+    } else {
+      deRatioEl.textContent = '-';
+    }
+  }
+
+  // Current Ratio
+  if (currentRatioEl) {
+    const crRaw = stock['Current Ratio'];
+    if (crRaw != null && !Number.isNaN(Number(crRaw))) {
+      currentRatioEl.textContent = Number(crRaw).toFixed(2);
+      if (Number(crRaw) >= 1.5) {
+        currentRatioEl.className = 'text-emerald-400 font-medium';
+      } else if (Number(crRaw) >= 1.0) {
+        currentRatioEl.className = 'text-amber-400 font-medium';
+      } else {
+        currentRatioEl.className = 'text-rose-400 font-bold';
+      }
+    } else {
+      currentRatioEl.textContent = '-';
+    }
+  }
+
+  // Net Profit Margin
+  if (npmEl) {
+    const npmRaw = stock['Net Profit Margin (%)'];
+    if (npmRaw != null && !Number.isNaN(Number(npmRaw))) {
+      npmEl.textContent = formatPercent(npmRaw);
+      if (Number(npmRaw) >= 15) {
+        npmEl.className = 'text-emerald-400 font-medium';
+      } else if (Number(npmRaw) >= 5) {
+        npmEl.className = 'text-violet-300';
+      } else {
+        npmEl.className = 'text-rose-300';
+      }
+    } else {
+      npmEl.textContent = '-';
+    }
+  }
 
   summary.classList.remove('hidden');
 }
@@ -1073,7 +1129,7 @@ function init() {
   if (t && niContainer && epsContainer && revContainer) {
     const statusEl = document.getElementById('status');
     // Ambil data fundamental untuk ditampilkan seperti di card utama
-    fetch(`http://127.0.0.1:8000/stocks?tickers=${encodeURIComponent(t)}`)
+    fetch(`http://127.0.0.1:8000/stocks?tickers=${encodeURIComponent(t)}`, { cache: 'no-store' })
       .then((res) => (res.ok ? res.json() : null))
       .then((json) => {
         if (Array.isArray(json) && json.length > 0) {
@@ -1096,7 +1152,7 @@ function init() {
 
     // Auto-refresh interval (every 60 seconds)
     setInterval(() => {
-      fetch(`http://127.0.0.1:8000/stocks?tickers=${encodeURIComponent(t)}`)
+      fetch(`http://127.0.0.1:8000/stocks?tickers=${encodeURIComponent(t)}`, { cache: 'no-store' })
         .then((res) => (res.ok ? res.json() : null))
         .then((json) => {
           if (Array.isArray(json) && json.length > 0 && !isLikelyInvalidTicker(json[0], t)) {
