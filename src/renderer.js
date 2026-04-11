@@ -453,8 +453,18 @@ function setDashboardViewMode(mode) {
 let currentSort = 'score-desc';
 let currentSectorFilter = 'all';
 
+function normalizeCachePayload(payload) {
+  if (payload && typeof payload === 'object' && payload.stock && typeof payload.stock === 'object') {
+    return payload;
+  }
+  if (payload && typeof payload === 'object') {
+    return { stock: payload };
+  }
+  return { stock: {} };
+}
+
 function getSortedAndFilteredTickers() {
-  const entries = Array.from(tickerCache.entries());
+  const entries = Array.from(tickerCache.entries()).map(([ticker, payload]) => [ticker, normalizeCachePayload(payload)]);
 
   // Populate Sector Filter if needed
   const sectors = new Set(['all']);
@@ -484,8 +494,8 @@ function getSortedAndFilteredTickers() {
 
   // Sort
   filtered.sort((a, b) => {
-    const sA = a[1].stock;
-    const sB = b[1].stock;
+    const sA = a[1]?.stock || {};
+    const sB = b[1]?.stock || {};
     switch (currentSort) {
       case 'ticker-asc': return a[0].localeCompare(b[0]);
       case 'score-desc': return (sB['Final Hybrid Score'] || 0) - (sA['Final Hybrid Score'] || 0);
@@ -496,7 +506,7 @@ function getSortedAndFilteredTickers() {
     }
   });
 
-  return filtered.map(([ticker, payload]) => [ticker, payload.stock]);
+  return filtered.map(([ticker, payload]) => [ticker, payload.stock || {}]);
 }
 
 function updateStatus() {
@@ -511,6 +521,7 @@ function renderDashboardCards() {
   if (!container) return;
 
   const sortedTickers = getSortedAndFilteredTickers();
+  const viewMode = getDashboardViewMode();
   
   if (sortedTickers.length === 0) {
     container.innerHTML = `
@@ -525,9 +536,52 @@ function renderDashboardCards() {
     return;
   }
 
-  // Choose renderer based on mode
   const builder = dashboardDisplayMode === 'full' ? buildFullCardHtml : buildCardHtml;
-  container.innerHTML = sortedTickers.map(([ticker, stock]) => builder(ticker, stock)).join('');
+
+  if (viewMode !== 'sector') {
+    container.innerHTML = sortedTickers.map(([ticker, stock]) => builder(ticker, stock)).join('');
+    updateStatus();
+    tooltips.init();
+    return;
+  }
+
+  const groups = new Map();
+  for (const [ticker, stock] of sortedTickers) {
+    const sector = normalizeSectorLabel(stock?.Sector);
+    if (!groups.has(sector)) groups.set(sector, []);
+    groups.get(sector).push([ticker, stock]);
+  }
+
+  const sectorNames = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b));
+  container.innerHTML = '';
+
+  for (let i = 0; i < sectorNames.length; i += 1) {
+    const sector = sectorNames[i];
+    const rows = groups.get(sector) || [];
+
+    const section = document.createElement('section');
+    section.className = `col-span-full space-y-3 ${i > 0 ? 'mt-8' : ''}`;
+
+    const header = document.createElement('h3');
+    header.className = 'text-center text-xs font-semibold uppercase tracking-wide text-sky-300';
+    header.textContent = `-- ${sector} --`;
+    section.appendChild(header);
+
+    const grid = document.createElement('div');
+    grid.className = 'mx-auto grid justify-items-center gap-3 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
+
+    for (const [ticker, stock] of rows) {
+      const wrap = document.createElement('div');
+      wrap.className = 'w-full max-w-sm';
+      wrap.innerHTML = builder(ticker, stock).trim();
+      const card = wrap.querySelector('article');
+      if (card) card.classList.add('w-full');
+      grid.appendChild(wrap);
+    }
+
+    section.appendChild(grid);
+    container.appendChild(section);
+  }
   
   updateStatus();
   tooltips.init();
@@ -742,7 +796,7 @@ function init() {
     try {
       const parsed = JSON.parse(cached);
       tickerCache.clear();
-      parsed.forEach(p => tickerCache.set(p[0], p[1]));
+      parsed.forEach(p => tickerCache.set(p[0], normalizeCachePayload(p[1])));
       renderDashboardCards();
       // Save to Cache (Convert Map to Object for JSON)
     const cacheObj = {};
